@@ -3,7 +3,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import auth_router, games_router, characters_router, actions_router
 from app.routers.actions import cooperation_router
+from app.routers.admin import router as admin_router
 from app.database import engine, Base
+from app.config import apply_admin_overrides
 from app.models import *  # noqa: F401 - ensure all models are registered
 
 
@@ -12,6 +14,8 @@ async def lifespan(app: FastAPI):
     # Auto-create tables on startup (safety net for fresh deployments)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    # Load admin settings overrides from JSON file
+    apply_admin_overrides()
     yield
 
 
@@ -37,6 +41,7 @@ app.include_router(games_router)
 app.include_router(characters_router)
 app.include_router(actions_router)
 app.include_router(cooperation_router)
+app.include_router(admin_router)
 
 
 @app.get("/")

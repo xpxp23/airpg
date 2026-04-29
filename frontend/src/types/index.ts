@@ -132,3 +132,13 @@ export interface GameEvent {
   is_visible: boolean;
   created_at: string;
 }
+
+export interface AdminSettings {
+  AI_PROVIDER: string;
+  AI_API_KEY: string;
+  AI_BASE_URL: string;
+  AI_MODEL_DEFAULT: string;
+  AI_MODEL_PREMIUM: string;
+  MAX_TOKENS: number;
+  MAX_TOKENS_DEFAULT: number;
+}

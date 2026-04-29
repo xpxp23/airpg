@@ -1,5 +1,9 @@
+import json
+import os
 from pydantic_settings import BaseSettings
 from functools import lru_cache
+
+ADMIN_SETTINGS_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "admin_settings.json")
 
 
 class Settings(BaseSettings):
@@ -15,6 +19,10 @@ class Settings(BaseSettings):
     AI_BASE_URL: str = "https://api.openai.com/v1"
     AI_MODEL_DEFAULT: str = "gpt-4o-mini"      # For evaluation, compression, etc.
     AI_MODEL_PREMIUM: str = "gpt-4o"           # For narrative generation, etc.
+
+    # Token limits
+    MAX_TOKENS: int = 8000           # For story parsing
+    MAX_TOKENS_DEFAULT: int = 2000   # For other AI calls
 
     # Claude (Anthropic) Configuration (optional)
     ANTHROPIC_API_KEY: str = ""
@@ -44,6 +52,63 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+
+
+# Admin-overridable fields (safe to expose in web UI)
+ADMIN_FIELDS = {
+    "AI_PROVIDER", "AI_API_KEY", "AI_BASE_URL",
+    "AI_MODEL_DEFAULT", "AI_MODEL_PREMIUM",
+    "MAX_TOKENS", "MAX_TOKENS_DEFAULT",
+}
+
+
+def load_admin_overrides() -> dict:
+    """Load admin settings from JSON file."""
+    if not os.path.exists(ADMIN_SETTINGS_PATH):
+        return {}
+    try:
+        with open(ADMIN_SETTINGS_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return {}
+
+
+def save_admin_overrides(overrides: dict) -> None:
+    """Save admin settings to JSON file."""
+    os.makedirs(os.path.dirname(ADMIN_SETTINGS_PATH), exist_ok=True)
+    with open(ADMIN_SETTINGS_PATH, "w", encoding="utf-8") as f:
+        json.dump(overrides, f, indent=2, ensure_ascii=False)
+
+
+def apply_admin_overrides() -> None:
+    """Apply admin overrides to the cached Settings instance."""
+    settings = get_settings()
+    overrides = load_admin_overrides()
+    for key, value in overrides.items():
+        if key in ADMIN_FIELDS:
+            object.__setattr__(settings, key, value)
+
+
+def update_admin_settings(updates: dict) -> dict:
+    """Update admin settings, persist, and apply to runtime."""
+    current = load_admin_overrides()
+    settings = get_settings()
+
+    for key, value in updates.items():
+        if key not in ADMIN_FIELDS:
+            continue
+        if value is not None:
+            current[key] = value
+            object.__setattr__(settings, key, value)
+
+    save_admin_overrides(current)
+    return get_current_admin_settings()
+
+
+def get_current_admin_settings() -> dict:
+    """Get current effective values for admin-overridable fields."""
+    settings = get_settings()
+    return {key: getattr(settings, key) for key in ADMIN_FIELDS}
 
 
 @lru_cache()

@@ -273,14 +273,15 @@ export default function GameRoomPage() {
 
           <div className="mb-6">
             <h2 className="text-lg font-semibold text-fantasy-text mb-4">
-              选择角色 ({characters.length}/{game.max_players})
+              选择角色 ({characters.filter((c) => c.player_id).length}/{game.max_players})
             </h2>
             {game.parse_status !== "completed" ? (
               <p className="text-fantasy-muted text-sm">等待 AI 解析完成后可选择角色...</p>
             ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {presetChars.map((pc) => {
-                const taken = characters.find((c) => c.name === pc.name);
+                const dbChar = characters.find((c) => c.id === pc.id);
+                const taken = dbChar && dbChar.player_id;
                 return (
                   <button
                     key={pc.id}

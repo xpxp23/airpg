@@ -83,6 +83,18 @@ npm run dev
 
 ## AI 模型配置
 
+支持两种配置方式：
+
+### 方式一：Web 管理界面（推荐）
+
+部署后访问 `http://你的服务器IP:55888/admin`，输入管理密码即可在线修改 AI 配置，无需重启服务。
+
+- **管理密码**：默认 `rpgadmin`（可在 `backend/app/routers/admin.py` 中修改）
+- **可配置项**：AI 提供商、API Key、API 地址、模型名称、Max Tokens
+- **即时生效**：保存后立即应用，无需重启容器
+
+### 方式二：环境变量
+
 在 `.env` 中配置，支持任意 OpenAI 兼容 API：
 
 ```bash
@@ -91,7 +103,11 @@ AI_API_KEY=your-api-key
 AI_BASE_URL=https://api.openai.com/v1    # 替换为你的 API 地址
 AI_MODEL_DEFAULT=gpt-4o-mini              # 低成本任务
 AI_MODEL_PREMIUM=gpt-4o                   # 叙事生成
+MAX_TOKENS=8000                           # 故事解析最大输出 token
+MAX_TOKENS_DEFAULT=2000                   # 其他 AI 调用最大输出 token
 ```
+
+### 支持的 AI 服务
 
 | 服务 | AI_BASE_URL | AI_MODEL_DEFAULT | AI_MODEL_PREMIUM |
 |------|-------------|------------------|------------------|
@@ -110,15 +126,23 @@ AI_MODEL_PREMIUM=gpt-4o                   # 叙事生成
 ├── backend/                    # FastAPI 后端
 │   ├── app/
 │   │   ├── main.py             # 入口
-│   │   ├── config.py           # 配置
+│   │   ├── config.py           # 配置（含管理员认证设置）
 │   │   ├── models/             # 数据库模型
 │   │   ├── schemas/            # 请求/响应模型
 │   │   ├── routers/            # API 路由
+│   │   │   ├── admin.py        # 管理后台 API
+│   │   │   └── ...
 │   │   └── services/           # 业务逻辑
+│   │       ├── ai_service.py   # AI 调用（支持多模型）
+│   │       └── game_service.py # 游戏逻辑（含角色创建）
+│   ├── data/
+│   │   └── admin_settings.json # 管理员设置持久化
 │   └── workers/                # 延迟任务处理
 ├── frontend/                   # Next.js 前端
 │   └── src/
-│       ├── app/                # 页面
+│       ├── app/
+│       │   ├── admin/          # 管理后台页面
+│       │   └── games/          # 游戏页面
 │       ├── components/         # 组件
 │       ├── hooks/              # 状态管理
 │       └── lib/                # API 客户端
@@ -146,6 +170,12 @@ AI_MODEL_PREMIUM=gpt-4o                   # 叙事生成
 | POST | `/api/v1/games/{id}/cooperation` | 发起协作 |
 | GET  | `/api/v1/games/{id}/events` | 获取事件流 |
 | GET  | `/api/v1/games/{id}/characters` | 获取角色列表 |
+| POST | `/api/v1/games/{id}/retry-parse` | 重新解析故事 |
+| POST | `/api/v1/games/{id}/disband` | 解散房间 |
+| POST | `/api/v1/games/{id}/leave` | 退出房间 |
+| POST | `/api/v1/admin/verify` | 管理员认证 |
+| GET  | `/api/v1/admin/settings` | 获取 AI 设置 |
+| PUT  | `/api/v1/admin/settings` | 更新 AI 设置 |
 
 ## 部署
 

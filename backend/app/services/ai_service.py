@@ -54,10 +54,12 @@ class AIService:
         user_prompt: str,
         model: str | None = None,
         temperature: float = 0.2,
-        max_tokens: int = 2000,
+        max_tokens: int | None = None,
         premium: bool = False,
     ) -> dict:
         """调用 LLM 并确保返回有效 JSON"""
+        if max_tokens is None:
+            max_tokens = settings.MAX_TOKENS_DEFAULT
         model = self._get_model(model, premium)
         content = await self._call_llm(system_prompt, user_prompt, model, temperature, max_tokens, json_mode=True)
 
@@ -76,10 +78,12 @@ class AIService:
         user_prompt: str,
         model: str | None = None,
         temperature: float = 0.7,
-        max_tokens: int = 2000,
+        max_tokens: int | None = None,
         premium: bool = False,
     ) -> str:
         """调用 LLM 获取文本响应"""
+        if max_tokens is None:
+            max_tokens = settings.MAX_TOKENS_DEFAULT
         model = self._get_model(model, premium)
         return await self._call_llm(system_prompt, user_prompt, model, temperature, max_tokens, json_mode=False)
 
@@ -126,7 +130,17 @@ class AIService:
         else:
             response = await self.client.chat.completions.create(**kwargs)
 
-        return response.choices[0].message.content or ""
+        choice = response.choices[0]
+        content = choice.message.content or ""
+
+        # 检测响应是否被截断
+        if choice.finish_reason == "length":
+            raise ValueError(
+                f"AI response truncated (max_tokens={max_tokens} too small). "
+                f"Response length: {len(content)} chars"
+            )
+
+        return content
 
     async def _call_anthropic(
         self, system_prompt: str, user_prompt: str, model: str,
@@ -219,9 +233,9 @@ class AIService:
 
 请解析上述故事并以 JSON 格式返回结构化信息。"""
 
-        # 故事解析需要高质量模型
+        # 故事解析需要高质量模型，输出 JSON 较长需要更多 token
         return await self.call_json(
-            system_prompt, user_prompt, temperature=0.3, premium=True
+            system_prompt, user_prompt, temperature=0.3, premium=True, max_tokens=settings.MAX_TOKENS
         )
 
     async def evaluate_action(

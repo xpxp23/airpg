@@ -75,6 +75,30 @@ class GameService:
             game.parse_status = ParseStatus.COMPLETED
             if summary.get("title") and not game.title:
                 game.title = summary["title"]
+
+            # Delete existing unclaimed preset characters (for retry-parse case)
+            existing = await self.db.execute(
+                select(Character).where(
+                    Character.game_id == game_id,
+                    Character.player_id.is_(None),
+                )
+            )
+            for char in existing.scalars().all():
+                await self.db.delete(char)
+
+            # Create Character rows from AI-generated preset_characters
+            for pc in summary.get("preset_characters", []):
+                character = Character(
+                    id=pc["id"],
+                    game_id=game_id,
+                    player_id=None,
+                    name=pc.get("name", "Unknown"),
+                    description=pc.get("description"),
+                    background=pc.get("background"),
+                    location=pc.get("starting_location"),
+                )
+                self.db.add(character)
+
             await self.db.commit()
             return summary
         except Exception as e:

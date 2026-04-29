@@ -1,4 +1,4 @@
-import { Token, Game, Character, GameAction, GameEvent } from "@/types";
+import { Token, Game, Character, GameAction, GameEvent, AdminSettings } from "@/types";
 
 const API_BASE = "/api/v1";
 
@@ -176,6 +176,26 @@ class ApiClient {
   async retryParse(gameId: string): Promise<Game> {
     return this.request(`/games/${gameId}/retry-parse`, {
       method: "POST",
+    });
+  }
+
+  // Admin
+  async adminVerify(password: string): Promise<{ token: string; expires_at: number }> {
+    return this.request("/admin/verify", {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    });
+  }
+
+  async getAdminSettings(): Promise<AdminSettings> {
+    return this.request("/admin/settings");
+  }
+
+  async updateAdminSettings(adminToken: string, settings: Partial<AdminSettings>): Promise<AdminSettings> {
+    return this.request("/admin/settings", {
+      method: "PUT",
+      body: JSON.stringify(settings),
+      headers: { "X-Admin-Token": adminToken },
     });
   }
 }

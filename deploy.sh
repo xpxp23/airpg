@@ -42,7 +42,7 @@ fi
 # 检查内存
 TOTAL_MEM=$(free -m | awk '/^Mem:/{print $2}')
 if [ "$TOTAL_MEM" -lt 3500 ]; then
-    log_warn "内存不足 4GB (当前: ${TOTAL_MEM}MB)，建议添加 swap"
+    log_warn "内存不足 4GB (当前: ${TOTAL_MEM}MB)，可能影响性能，建议添加 swap"
     if [ ! -f /swapfile ]; then
         read -p "是否自动创建 4GB swap? [y/N] " CREATE_SWAP
         if [[ "$CREATE_SWAP" =~ ^[Yy]$ ]]; then
@@ -53,6 +53,8 @@ if [ "$TOTAL_MEM" -lt 3500 ]; then
             sudo swapon /swapfile
             echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
             log_info "swap 创建完成"
+        else
+            log_warn "跳过 swap 创建，继续部署..."
         fi
     fi
 fi
@@ -60,10 +62,11 @@ fi
 # 检查磁盘空间
 AVAIL_DISK=$(df -BG . | awk 'NR==2{print $4}' | tr -d 'G')
 if [ "$AVAIL_DISK" -lt 20 ]; then
-    log_error "磁盘空间不足 20GB (可用: ${AVAIL_DISK}GB)"
-    exit 1
+    log_warn "磁盘空间不足 20GB (可用: ${AVAIL_DISK}GB)，可能导致构建失败"
+else
+    log_info "磁盘空间充足: ${AVAIL_DISK}GB"
 fi
-log_info "可用磁盘: ${AVAIL_DISK}GB，内存: ${TOTAL_MEM}MB"
+log_info "内存: ${TOTAL_MEM}MB"
 
 # ----- 安装 Docker -----
 

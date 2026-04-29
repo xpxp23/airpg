@@ -58,6 +58,7 @@ export interface Scene {
 
 export interface PresetCharacter {
   id: string;
+  db_id?: string;
   name: string;
   description: string;
   background: string;

@@ -313,14 +313,15 @@ export default function GameRoomPage() {
             ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {presetChars.map((pc) => {
-                const dbChar = characters.find((c) => c.id === pc.id);
+                const charId = pc.db_id || pc.id;
+                const dbChar = characters.find((c) => c.id === charId);
                 const taken = dbChar && dbChar.player_id;
                 const isMyChar = dbChar && dbChar.player_id === user.id;
                 const canSwitch = !taken || isMyChar;
                 return (
                   <button
-                    key={pc.id}
-                    onClick={() => canSwitch && !joining && handleJoin(pc.id)}
+                    key={charId}
+                    onClick={() => canSwitch && !joining && handleJoin(charId)}
                     disabled={!canSwitch || joining}
                     className={`p-4 rounded-xl border text-left transition-all ${
                       isMyChar

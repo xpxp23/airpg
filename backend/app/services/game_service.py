@@ -71,8 +71,7 @@ class GameService:
         try:
             summary = await self.ai_service.parse_story(game.uploaded_story, game.duration_hint)
 
-            # Delete existing unclaimed preset characters (for retry-parse case)
-            # Use bulk DELETE to ensure rows are removed before INSERT
+            # Delete ALL existing unclaimed characters for this game (retry-parse case)
             from sqlalchemy import delete as sql_delete
             await self.db.execute(
                 sql_delete(Character).where(
@@ -87,10 +86,14 @@ class GameService:
             if summary.get("title") and not game.title:
                 game.title = summary["title"]
 
-            # Create Character rows from AI-generated preset_characters
+            # Create Character rows with globally unique UUIDs
+            # (AI-generated IDs like "char_1" are not globally unique)
             for pc in summary.get("preset_characters", []):
+                char_id = str(uuid.uuid4())
+                # Update the ID in ai_summary so frontend can match
+                pc["db_id"] = char_id
                 character = Character(
-                    id=pc["id"],
+                    id=char_id,
                     game_id=game_id,
                     player_id=None,
                     name=pc.get("name", "Unknown"),

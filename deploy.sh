@@ -68,18 +68,28 @@ DEOFE
     fi
 
     # 2. 宿主机 apt 镜像（Debian/Ubuntu）
-    if [ -f /etc/debian_version ]; then
+    DISTRO_ID=$(. /etc/os-release 2>/dev/null && echo "$ID")
+    DISTRO_CODENAME=$(. /etc/os-release 2>/dev/null && echo "$VERSION_CODENAME")
+    if [ "$DISTRO_ID" = "debian" ] || [ "$DISTRO_ID" = "ubuntu" ]; then
         if ! grep -q "mirrors.aliyun.com" /etc/apt/sources.list 2>/dev/null; then
-            CODENAME=$(. /etc/os-release && echo "$VERSION_CODENAME")
-            if [ -n "$CODENAME" ]; then
+            if [ -n "$DISTRO_CODENAME" ]; then
                 sudo cp /etc/apt/sources.list /etc/apt/sources.list.bak.$(date +%s)
-                sudo tee /etc/apt/sources.list > /dev/null <<EOF
-deb https://mirrors.aliyun.com/debian/ ${CODENAME} main contrib non-free non-free-firmware
-deb https://mirrors.aliyun.com/debian/ ${CODENAME}-updates main contrib non-free non-free-firmware
-deb https://mirrors.aliyun.com/debian-security ${CODENAME}-security main contrib non-free non-free-firmware
+                if [ "$DISTRO_ID" = "ubuntu" ]; then
+                    sudo tee /etc/apt/sources.list > /dev/null <<EOF
+deb https://mirrors.aliyun.com/ubuntu/ ${DISTRO_CODENAME} main restricted universe multiverse
+deb https://mirrors.aliyun.com/ubuntu/ ${DISTRO_CODENAME}-updates main restricted universe multiverse
+deb https://mirrors.aliyun.com/ubuntu/ ${DISTRO_CODENAME}-security main restricted universe multiverse
+deb https://mirrors.aliyun.com/ubuntu/ ${DISTRO_CODENAME}-backports main restricted universe multiverse
 EOF
+                else
+                    sudo tee /etc/apt/sources.list > /dev/null <<EOF
+deb https://mirrors.aliyun.com/debian/ ${DISTRO_CODENAME} main contrib non-free non-free-firmware
+deb https://mirrors.aliyun.com/debian/ ${DISTRO_CODENAME}-updates main contrib non-free non-free-firmware
+deb https://mirrors.aliyun.com/debian-security ${DISTRO_CODENAME}-security main contrib non-free non-free-firmware
+EOF
+                fi
                 sudo apt-get update -qq
-                log_info "宿主机 apt 镜像已配置 (${CODENAME})"
+                log_info "宿主机 apt 镜像已配置 (${DISTRO_ID} ${DISTRO_CODENAME})"
             fi
         else
             log_info "宿主机 apt 镜像已存在，跳过"

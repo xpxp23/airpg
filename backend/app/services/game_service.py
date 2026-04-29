@@ -193,14 +193,12 @@ class GameService:
         if current_count >= game.max_players:
             raise ValueError("Game is full")
 
-        # Check if user already in game
+        # Check if user already in game - allow character switching
         result = await self.db.execute(
             select(Character)
             .where(Character.game_id == game_id, Character.player_id == user_id)
         )
         existing = result.scalar_one_or_none()
-        if existing:
-            raise ValueError("Already in this game")
 
         if character_id:
             # Select existing character with lock
@@ -212,10 +210,17 @@ class GameService:
             character = result.scalar_one_or_none()
             if not character:
                 raise ValueError("Character not found")
-            if character.player_id is not None:
+            # Allow switching if character is not taken by another player
+            if character.player_id is not None and character.player_id != user_id:
                 raise ValueError("Character already taken")
+            # If switching characters, release the old one
+            if existing and existing.id != character_id:
+                existing.player_id = None
             character.player_id = user_id
         else:
+            # If switching to custom character, release the old one
+            if existing:
+                existing.player_id = None
             # Create custom character
             user = await self.db.execute(select(User).where(User.id == user_id))
             user = user.scalar_one()

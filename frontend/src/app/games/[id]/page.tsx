@@ -282,20 +282,25 @@ export default function GameRoomPage() {
               {presetChars.map((pc) => {
                 const dbChar = characters.find((c) => c.id === pc.id);
                 const taken = dbChar && dbChar.player_id;
+                const isMyChar = dbChar && dbChar.player_id === user.id;
+                const canSwitch = !taken || isMyChar;
                 return (
                   <button
                     key={pc.id}
-                    onClick={() => !taken && !joining && handleJoin(pc.id)}
-                    disabled={!!taken || hasCharacter || joining}
+                    onClick={() => canSwitch && !joining && handleJoin(pc.id)}
+                    disabled={!canSwitch || joining}
                     className={`p-4 rounded-xl border text-left transition-all ${
-                      taken
+                      isMyChar
+                        ? "border-green-500/50 bg-green-500/10 cursor-default"
+                        : taken
                         ? "border-fantasy-muted/20 opacity-50 cursor-not-allowed"
                         : "border-fantasy-accent/20 hover:border-fantasy-accent/50 cursor-pointer"
                     }`}
                   >
                     <div className="font-semibold text-fantasy-text">
                       {pc.name}
-                      {taken && <span className="text-fantasy-muted text-sm ml-2">已被选择</span>}
+                      {isMyChar && <span className="text-green-400 text-sm ml-2">当前角色</span>}
+                      {taken && !isMyChar && <span className="text-fantasy-muted text-sm ml-2">已被选择</span>}
                     </div>
                     <div className="text-sm text-fantasy-muted mt-1">{pc.description}</div>
                     <div className="text-xs text-fantasy-muted/60 mt-2">
@@ -308,22 +313,20 @@ export default function GameRoomPage() {
             )}
           </div>
 
-          {!hasCharacter && (
-            <div className="mb-6">
-              <h3 className="text-md font-semibold text-fantasy-text mb-2">或自创角色</h3>
-              <button
-                onClick={() => handleJoin()}
-                disabled={joining}
-                className="bg-fantasy-card hover:bg-fantasy-card/80 disabled:opacity-50 border border-fantasy-accent/20 text-fantasy-text px-6 py-3 rounded-lg transition-colors"
-              >
-                {joining ? "加入中..." : "创建自定义角色"}
-              </button>
-            </div>
-          )}
+          <div className="mb-6">
+            <h3 className="text-md font-semibold text-fantasy-text mb-2">或自创角色</h3>
+            <button
+              onClick={() => handleJoin()}
+              disabled={joining}
+              className="bg-fantasy-card hover:bg-fantasy-card/80 disabled:opacity-50 border border-fantasy-accent/20 text-fantasy-text px-6 py-3 rounded-lg transition-colors"
+            >
+              {joining ? "加入中..." : hasCharacter ? "切换为自定义角色" : "创建自定义角色"}
+            </button>
+          </div>
 
           {hasCharacter && (
             <div className="bg-green-500/10 border border-green-500/30 text-green-400 px-4 py-3 rounded-lg mb-6 flex items-center justify-between">
-              <span>你已加入游戏，等待其他玩家...</span>
+              <span>你已选择角色：{myCharacter?.name || "未知"}，点击其他角色可切换</span>
               {!isCreator && (
                 <button
                   onClick={handleLeave}
@@ -336,17 +339,17 @@ export default function GameRoomPage() {
           )}
 
           <div className="flex items-center justify-between text-sm text-fantasy-muted mb-4">
-            <span>当前 {characters.length} / {game.max_players} 名玩家</span>
+            <span>当前 {characters.filter((c) => c.player_id).length} / {game.max_players} 名玩家</span>
           </div>
 
           {isCreator && (
             <div className="space-y-3">
               <button
                 onClick={handleStart}
-                disabled={game.parse_status !== "completed" || characters.length === 0 || starting}
+                disabled={game.parse_status !== "completed" || characters.filter((c) => c.player_id).length === 0 || starting}
                 className="w-full bg-fantasy-accent hover:bg-fantasy-accent/80 disabled:bg-fantasy-accent/50 disabled:cursor-not-allowed text-white py-4 rounded-lg text-lg font-semibold transition-colors shadow-lg shadow-fantasy-accent/25"
               >
-                {starting ? "启动中..." : game.parse_status === "pending" ? "等待解析开始..." : game.parse_status === "processing" ? "等待 AI 解析完成..." : game.parse_status === "failed" ? "解析失败，请重试" : characters.length === 0 ? "等待玩家加入..." : "开始游戏"}
+                {starting ? "启动中..." : game.parse_status === "pending" ? "等待解析开始..." : game.parse_status === "processing" ? "等待 AI 解析完成..." : game.parse_status === "failed" ? "解析失败，请重试" : characters.filter((c) => c.player_id).length === 0 ? "等待玩家加入..." : "开始游戏"}
               </button>
               <button
                 onClick={handleDisband}

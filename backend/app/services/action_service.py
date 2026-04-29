@@ -46,12 +46,35 @@ class ActionService:
             if scenes:
                 current_scene = scenes[0].get("description", "未知场景")
 
-        # AI evaluation
-        eval_result = await self.ai_service.evaluate_action(
-            action_text=data.action_text,
-            scene=current_scene,
-            character_status=character.status_effects or {},
-        )
+        # Get chapter info
+        chapter = game.current_chapter or 1
+        chapter_title = ""
+        chapter_goal = ""
+        if game.ai_summary and "chapter_plan" in game.ai_summary:
+            for cp in game.ai_summary["chapter_plan"]:
+                if cp.get("chapter") == chapter:
+                    chapter_title = cp.get("title", "")
+                    chapter_goal = cp.get("goal", "")
+                    break
+
+        # AI evaluation - with fallback on failure
+        try:
+            eval_result = await self.ai_service.evaluate_action(
+                action_text=data.action_text,
+                scene=current_scene,
+                character_status=character.status_effects or {},
+                chapter=chapter,
+                chapter_title=chapter_title,
+                chapter_goal=chapter_goal,
+            )
+        except Exception:
+            # Fallback if AI fails
+            eval_result = {
+                "public_snippet": f"{character.name}正在行动...",
+                "wait_seconds": 60,
+                "difficulty": "medium",
+                "risk": "low",
+            }
 
         wait_seconds = eval_result.get("wait_seconds", 60)
         now = datetime.utcnow()
@@ -100,14 +123,25 @@ class ActionService:
         game = await self.game_service.get_game(action.game_id)
         character = await self.game_service.get_character(action.character_id)
 
-        # Generate narrative
-        narrative_result = await self.ai_service.generate_narrative(
-            action_text=action.input_text,
-            character_name=character.name,
-            wait_seconds=action.wait_seconds,
-            difficulty=action.difficulty or "medium",
-            risk=action.risk or "low",
-        )
+        # Generate narrative - with fallback on failure
+        try:
+            narrative_result = await self.ai_service.generate_narrative(
+                action_text=action.input_text,
+                character_name=character.name,
+                wait_seconds=action.wait_seconds,
+                difficulty=action.difficulty or "medium",
+                risk=action.risk or "low",
+            )
+        except Exception:
+            # Fallback if AI fails
+            narrative_result = {
+                "narrative": f"{character.name}完成了行动。",
+                "outcome": "success",
+                "effects": {},
+                "chapter_progress": {"advance_chapter": False},
+                "game_over": False,
+                "importance": "medium",
+            }
 
         # Update action
         action.status = ActionStatus.COMPLETED

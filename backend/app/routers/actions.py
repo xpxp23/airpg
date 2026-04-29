@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
@@ -6,6 +7,8 @@ from app.services.action_service import ActionService
 from app.services.game_service import GameService
 from app.dependencies import get_current_user
 from app.models.user import User
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/games/{game_id}/actions", tags=["actions"])
 
@@ -23,6 +26,9 @@ async def submit_action(
         return action_service.action_to_response(action)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Error submitting action")
+        raise HTTPException(status_code=500, detail=f"行动提交失败: {str(e)}")
 
 
 @router.get("", response_model=ActionListResponse)
@@ -91,3 +97,6 @@ async def submit_cooperation(
         return action_service.action_to_response(action)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Error submitting cooperation")
+        raise HTTPException(status_code=500, detail=f"协作提交失败: {str(e)}")

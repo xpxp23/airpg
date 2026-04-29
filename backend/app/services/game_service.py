@@ -71,20 +71,21 @@ class GameService:
         try:
             summary = await self.ai_service.parse_story(game.uploaded_story, game.duration_hint)
 
-            game.ai_summary = summary
-            game.parse_status = ParseStatus.COMPLETED
-            if summary.get("title") and not game.title:
-                game.title = summary["title"]
-
             # Delete existing unclaimed preset characters (for retry-parse case)
-            existing = await self.db.execute(
-                select(Character).where(
+            # Use bulk DELETE to ensure rows are removed before INSERT
+            from sqlalchemy import delete as sql_delete
+            await self.db.execute(
+                sql_delete(Character).where(
                     Character.game_id == game_id,
                     Character.player_id.is_(None),
                 )
             )
-            for char in existing.scalars().all():
-                await self.db.delete(char)
+            await self.db.flush()
+
+            game.ai_summary = summary
+            game.parse_status = ParseStatus.COMPLETED
+            if summary.get("title") and not game.title:
+                game.title = summary["title"]
 
             # Create Character rows from AI-generated preset_characters
             for pc in summary.get("preset_characters", []):
@@ -102,9 +103,12 @@ class GameService:
             await self.db.commit()
             return summary
         except Exception as e:
-            game.parse_status = ParseStatus.FAILED
-            game.parse_error = str(e)[:500]  # Limit error message length
-            await self.db.commit()
+            await self.db.rollback()
+            game = await self.get_game(game_id)
+            if game:
+                game.parse_status = ParseStatus.FAILED
+                game.parse_error = str(e)[:500]
+                await self.db.commit()
             raise
 
     async def retry_parse_story(self, game_id: str) -> dict:

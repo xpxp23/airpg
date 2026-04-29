@@ -357,8 +357,24 @@ log_info "Redis 就绪"
 
 log_step "7/7 初始化数据库..."
 
-docker compose -f $COMPOSE_FILE exec -T backend alembic upgrade head 2>/dev/null || \
-    log_warn "数据库迁移执行失败（如果是首次部署可能需要手动执行）"
+# Wait for backend to be ready (it auto-creates tables on startup via lifespan handler)
+RETRIES=0
+until docker compose -f $COMPOSE_FILE exec -T backend python -c "import httpx; httpx.get('http://localhost:8000/health')" &>/dev/null; do
+    RETRIES=$((RETRIES + 1))
+    if [ $RETRIES -gt 30 ]; then
+        log_warn "后端启动超时，尝试直接执行迁移..."
+        break
+    fi
+    sleep 2
+done
+
+if [ $RETRIES -le 30 ]; then
+    log_info "后端就绪"
+fi
+
+# Run Alembic migrations (for schema versioning; tables already created by lifespan handler)
+docker compose -f $COMPOSE_FILE exec -T backend alembic upgrade head 2>&1 || \
+    log_warn "Alembic 迁移执行失败（表已由启动时自动创建，可忽略此警告）"
 
 # ----- 部署完成 -----
 

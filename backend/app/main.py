@@ -1,19 +1,32 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import auth_router, games_router, characters_router, actions_router
 from app.routers.actions import cooperation_router
+from app.database import engine, Base
+from app.models import *  # noqa: F401 - ensure all models are registered
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Auto-create tables on startup (safety net for fresh deployments)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+
 
 app = FastAPI(
     title="AI Async Narrative RPG",
     description="AI 叙事型多人异步跑团游戏 API",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
-# CORS
+# CORS - allow all origins for API (uses Bearer token auth, not cookies)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

@@ -14,6 +14,125 @@ class ActionService:
         self.ai_service = AIService()
         self.game_service = GameService(db)
 
+    async def _build_game_context(self, game: Game, current_character: Character | None = None) -> dict:
+        """构建完整的游戏上下文，供 AI 调用使用。"""
+        ai = game.ai_summary or {}
+
+        # 故事背景摘要
+        story_summary_parts = []
+        if ai.get("title"):
+            story_summary_parts.append(f"故事标题：{ai['title']}")
+        if ai.get("genre"):
+            story_summary_parts.append(f"类型：{ai['genre']}")
+        if ai.get("tone"):
+            story_summary_parts.append(f"基调：{ai['tone']}")
+        if ai.get("main_goal"):
+            story_summary_parts.append(f"主线目标：{ai['main_goal']}")
+        if ai.get("initial_state", {}).get("narrative"):
+            story_summary_parts.append(f"开场：{ai['initial_state']['narrative'][:500]}")
+        story_summary = "\n".join(story_summary_parts)
+
+        # 场景信息 — 根据角色当前位置匹配
+        current_scene = "未知场景"
+        scenes = ai.get("scenes", [])
+        if current_character and current_character.location:
+            for s in scenes:
+                if s.get("id") == current_character.location or s.get("name") == current_character.location:
+                    current_scene = f"{s.get('name', '')}：{s.get('description', '')}"
+                    if s.get("secrets"):
+                        current_scene += f"\n隐藏信息：{s['secrets']}"
+                    break
+        if current_scene == "未知场景" and scenes:
+            current_scene = f"{scenes[0].get('name', '')}：{scenes[0].get('description', '')}"
+
+        # 章节信息
+        chapter = game.current_chapter or 1
+        chapter_info_parts = [f"当前章节：第{chapter}章"]
+        chapter_title = ""
+        chapter_goal = ""
+        for cp in ai.get("chapter_plan", []):
+            if cp.get("chapter") == chapter:
+                chapter_title = cp.get("title", "")
+                chapter_goal = cp.get("goal", "")
+                chapter_info_parts.append(f"章节标题：{chapter_title}")
+                chapter_info_parts.append(f"阶段目标：{chapter_goal}")
+                if cp.get("key_events"):
+                    chapter_info_parts.append(f"关键事件：{', '.join(cp['key_events'])}")
+                break
+        chapter_info = "\n".join(chapter_info_parts)
+
+        # 全队角色状态
+        all_chars = await self.game_service.get_game_characters(game.id)
+        all_chars_lines = []
+        for c in all_chars:
+            if not c.player_id:
+                continue  # 跳过未选择的角色
+            status = c.status_effects or {}
+            health = status.get("health", 100)
+            items = status.get("items", [])
+            injuries = status.get("injuries", [])
+            line = f"- {c.name}（{'存活' if c.is_alive else '倒下'}）"
+            if c.location:
+                line += f" 位置：{c.location}"
+            line += f" 生命：{health}/100"
+            if items:
+                line += f" 物品：{', '.join(items)}"
+            if injuries:
+                line += f" 状态：{', '.join(str(i) for i in injuries)}"
+            if c.id == current_character.id if current_character else False:
+                line += " [当前行动角色]"
+            all_chars_lines.append(line)
+        all_characters_status = "\n".join(all_chars_lines) if all_chars_lines else "暂无队伍信息"
+
+        # 当前角色详细状态
+        character_status_str = "{}"
+        if current_character:
+            character_status_str = str(current_character.status_effects or {})
+
+        # 最近事件（取最近 20 条可见事件）
+        recent_events_list = await self.game_service.get_game_events(game.id, limit=20)
+        recent_events_lines = []
+        for ev in reversed(recent_events_list):  # 按时间正序
+            data = ev.data or {}
+            ts = ev.timestamp.strftime("%H:%M") if ev.timestamp else "??:??"
+            if ev.type == EventType.ACTION_RESULT:
+                recent_events_lines.append(f"[{ts}] {data.get('character_name', '?')} 的行动结果：{data.get('narrative', '')[:200]}")
+            elif ev.type == EventType.ACTION_START:
+                recent_events_lines.append(f"[{ts}] {data.get('character_name', '?')} 开始行动：{data.get('public_snippet', '')}")
+            elif ev.type == EventType.GAME_START:
+                recent_events_lines.append(f"[{ts}] 游戏开始：{data.get('narrative', '')[:200]}")
+            elif ev.type == EventType.CHAPTER_ADVANCE:
+                recent_events_lines.append(f"[{ts}] 进入第{data.get('chapter', '?')}章：{data.get('description', '')}")
+            elif ev.type == EventType.COOPERATION_RESULT:
+                recent_events_lines.append(f"[{ts}] {data.get('helper_name', '?')} 协助了 {data.get('target_name', '?')}：{data.get('narrative', '')}")
+            elif ev.type == EventType.PLAYER_JOIN:
+                recent_events_lines.append(f"[{ts}] {data.get('character_name', '?')} 加入了队伍")
+        recent_events = "\n".join(recent_events_lines) if recent_events_lines else "暂无事件记录"
+
+        # 游戏已进行时间
+        elapsed_time = ""
+        if game.started_at:
+            started = game.started_at.replace(tzinfo=timezone.utc) if game.started_at.tzinfo is None else game.started_at
+            elapsed = (datetime.now(timezone.utc) - started).total_seconds()
+            hours = int(elapsed // 3600)
+            minutes = int((elapsed % 3600) // 60)
+            elapsed_time = f"{hours}小时{minutes}分钟" if hours > 0 else f"{minutes}分钟"
+        target_duration = f"{game.target_duration_minutes}分钟" if game.target_duration_minutes else "未设定"
+
+        return {
+            "story_summary": story_summary,
+            "current_scene": current_scene,
+            "chapter_info": chapter_info,
+            "chapter": chapter,
+            "chapter_title": chapter_title,
+            "chapter_goal": chapter_goal,
+            "all_characters_status": all_characters_status,
+            "character_status": character_status_str,
+            "recent_events": recent_events,
+            "elapsed_time": elapsed_time,
+            "target_duration": target_duration,
+        }
+
     async def submit_action(self, game_id: str, user_id: str, data: ActionCreate) -> Action:
         # Validate game state
         game = await self.game_service.get_game(game_id)
@@ -39,33 +158,24 @@ class ActionService:
         if result.scalar_one_or_none():
             raise ValueError("Character already has a pending action")
 
-        # Get current scene for AI evaluation
-        current_scene = "未知场景"
-        if game.ai_summary and "scenes" in game.ai_summary:
-            scenes = game.ai_summary["scenes"]
-            if scenes:
-                current_scene = scenes[0].get("description", "未知场景")
-
-        # Get chapter info
-        chapter = game.current_chapter or 1
-        chapter_title = ""
-        chapter_goal = ""
-        if game.ai_summary and "chapter_plan" in game.ai_summary:
-            for cp in game.ai_summary["chapter_plan"]:
-                if cp.get("chapter") == chapter:
-                    chapter_title = cp.get("title", "")
-                    chapter_goal = cp.get("goal", "")
-                    break
+        # Build full game context for AI
+        ctx = await self._build_game_context(game, character)
 
         # AI evaluation - with fallback on failure
         try:
             eval_result = await self.ai_service.evaluate_action(
                 action_text=data.action_text,
-                scene=current_scene,
+                scene=ctx["current_scene"],
                 character_status=character.status_effects or {},
-                chapter=chapter,
-                chapter_title=chapter_title,
-                chapter_goal=chapter_goal,
+                chapter=ctx["chapter"],
+                chapter_title=ctx["chapter_title"],
+                chapter_goal=ctx["chapter_goal"],
+                characters_status=ctx["all_characters_status"],
+                elapsed_time=ctx["elapsed_time"],
+                target_duration=ctx["target_duration"],
+                game_memory=ctx["story_summary"],
+                character_name=character.name,
+                recent_events=ctx["recent_events"],
             )
         except Exception:
             # Fallback if AI fails
@@ -123,7 +233,10 @@ class ActionService:
         game = await self.game_service.get_game(action.game_id)
         character = await self.game_service.get_character(action.character_id)
 
-        # Generate narrative - with fallback on failure
+        # Build full game context for AI
+        ctx = await self._build_game_context(game, character)
+
+        # Generate narrative - with full context, fallback on failure
         try:
             narrative_result = await self.ai_service.generate_narrative(
                 action_text=action.input_text,
@@ -131,6 +244,13 @@ class ActionService:
                 wait_seconds=action.wait_seconds,
                 difficulty=action.difficulty or "medium",
                 risk=action.risk or "low",
+                game_memory=ctx["story_summary"],
+                current_scene=ctx["current_scene"],
+                character_status=ctx["character_status"],
+                all_characters_status=ctx["all_characters_status"],
+                chapter_info=ctx["chapter_info"],
+                recent_events=ctx["recent_events"],
+                story_summary=ctx["story_summary"],
             )
         except Exception:
             # Fallback if AI fails

@@ -67,6 +67,8 @@ class AdminSettingsUpdate(BaseModel):
     AI_MODEL_PREMIUM: str | None = None
     MAX_TOKENS: int | None = None
     MAX_TOKENS_DEFAULT: int | None = None
+    AI_THINKING_ENABLED: bool | None = None
+    AI_THINKING_EFFORT: str | None = None
 
 
 # --- Dependency ---

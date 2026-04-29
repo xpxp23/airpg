@@ -85,7 +85,7 @@ export default function AdminPage() {
     setPassword("");
   }
 
-  function updateField(key: keyof AdminSettings, value: string | number) {
+  function updateField(key: keyof AdminSettings, value: string | number | boolean) {
     if (!settings) return;
     setSettings({ ...settings, [key]: value });
   }
@@ -279,7 +279,6 @@ export default function AdminPage() {
               onChange={(e) => updateField("MAX_TOKENS", parseInt(e.target.value) || 0)}
               className="w-full bg-fantasy-bg/50 border border-fantasy-accent/20 rounded-lg px-4 py-3 text-fantasy-text focus:outline-none focus:border-fantasy-accent/50 transition-colors"
               min={1000}
-              max={32000}
             />
             <p className="text-xs text-fantasy-muted mt-1">AI 解析故事文本时的最大输出 token 数</p>
           </div>
@@ -294,10 +293,62 @@ export default function AdminPage() {
               onChange={(e) => updateField("MAX_TOKENS_DEFAULT", parseInt(e.target.value) || 0)}
               className="w-full bg-fantasy-bg/50 border border-fantasy-accent/20 rounded-lg px-4 py-3 text-fantasy-text focus:outline-none focus:border-fantasy-accent/50 transition-colors"
               min={500}
-              max={16000}
             />
             <p className="text-xs text-fantasy-muted mt-1">其他 AI 调用的最大输出 token 数</p>
           </div>
+        </div>
+
+        <div className="bg-fantasy-card/80 backdrop-blur-sm rounded-2xl p-6 border border-fantasy-accent/10 space-y-5">
+          <h2 className="text-lg font-semibold text-fantasy-text border-b border-fantasy-accent/10 pb-3">
+            思考模式
+          </h2>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="block text-sm font-medium text-fantasy-muted mb-1">
+                启用思考模式
+              </label>
+              <p className="text-xs text-fantasy-muted/60">模型会先输出思维链再给出答案，提升叙事质量</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => updateField("AI_THINKING_ENABLED", !settings.AI_THINKING_ENABLED)}
+              className={`relative w-12 h-6 rounded-full transition-colors ${
+                settings.AI_THINKING_ENABLED ? "bg-fantasy-accent" : "bg-fantasy-bg/50 border border-fantasy-accent/20"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                  settings.AI_THINKING_ENABLED ? "translate-x-6" : "translate-x-0.5"
+                }`}
+              />
+            </button>
+          </div>
+
+          {settings.AI_THINKING_ENABLED && (
+            <div>
+              <label className="block text-sm font-medium text-fantasy-muted mb-2">
+                思考强度
+              </label>
+              <div className="flex gap-3">
+                {(["high", "max"] as const).map((effort) => (
+                  <button
+                    key={effort}
+                    type="button"
+                    onClick={() => updateField("AI_THINKING_EFFORT", effort)}
+                    className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                      settings.AI_THINKING_EFFORT === effort
+                        ? "bg-fantasy-accent text-white"
+                        : "bg-fantasy-bg/50 border border-fantasy-accent/20 text-fantasy-muted hover:text-fantasy-text"
+                    }`}
+                  >
+                    {effort === "high" ? "高 (high)" : "最大 (max)"}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-fantasy-muted mt-2">高 = 平衡质量与速度；最大 = 最强推理能力，适合复杂剧情</p>
+            </div>
+          )}
         </div>
 
         <button

@@ -20,9 +20,13 @@ class Settings(BaseSettings):
     AI_MODEL_DEFAULT: str = "gpt-4o-mini"      # For evaluation, compression, etc.
     AI_MODEL_PREMIUM: str = "gpt-4o"           # For narrative generation, etc.
 
-    # Token limits
-    MAX_TOKENS: int = 8000           # For story parsing
-    MAX_TOKENS_DEFAULT: int = 2000   # For other AI calls
+    # Token limits (high default for million-context models)
+    MAX_TOKENS: int = 65536
+    MAX_TOKENS_DEFAULT: int = 16384
+
+    # Thinking mode (DeepSeek / compatible models)
+    AI_THINKING_ENABLED: bool = True
+    AI_THINKING_EFFORT: str = "high"  # high / max
 
     # Claude (Anthropic) Configuration (optional)
     ANTHROPIC_API_KEY: str = ""
@@ -59,6 +63,7 @@ ADMIN_FIELDS = {
     "AI_PROVIDER", "AI_API_KEY", "AI_BASE_URL",
     "AI_MODEL_DEFAULT", "AI_MODEL_PREMIUM",
     "MAX_TOKENS", "MAX_TOKENS_DEFAULT",
+    "AI_THINKING_ENABLED", "AI_THINKING_EFFORT",
 }
 
 

@@ -56,12 +56,13 @@ class AIService:
         temperature: float = 0.2,
         max_tokens: int | None = None,
         premium: bool = False,
+        thinking: bool | None = None,
     ) -> dict:
         """调用 LLM 并确保返回有效 JSON"""
         if max_tokens is None:
             max_tokens = settings.MAX_TOKENS_DEFAULT
         model = self._get_model(model, premium)
-        content = await self._call_llm(system_prompt, user_prompt, model, temperature, max_tokens, json_mode=True)
+        content = await self._call_llm(system_prompt, user_prompt, model, temperature, max_tokens, json_mode=True, thinking=thinking)
 
         try:
             return json.loads(content)
@@ -80,12 +81,13 @@ class AIService:
         temperature: float = 0.7,
         max_tokens: int | None = None,
         premium: bool = False,
+        thinking: bool | None = None,
     ) -> str:
         """调用 LLM 获取文本响应"""
         if max_tokens is None:
             max_tokens = settings.MAX_TOKENS_DEFAULT
         model = self._get_model(model, premium)
-        return await self._call_llm(system_prompt, user_prompt, model, temperature, max_tokens, json_mode=False)
+        return await self._call_llm(system_prompt, user_prompt, model, temperature, max_tokens, json_mode=False, thinking=thinking)
 
     async def _call_llm(
         self,
@@ -95,18 +97,20 @@ class AIService:
         temperature: float,
         max_tokens: int,
         json_mode: bool = False,
+        thinking: bool | None = None,
     ) -> str:
         """底层 LLM 调用，支持 OpenAI 和 Anthropic"""
         if self.is_anthropic:
-            return await self._call_anthropic(system_prompt, user_prompt, model, temperature, max_tokens, json_mode)
+            return await self._call_anthropic(system_prompt, user_prompt, model, temperature, max_tokens, json_mode, thinking)
         else:
-            return await self._call_openai_compatible(system_prompt, user_prompt, model, temperature, max_tokens, json_mode)
+            return await self._call_openai_compatible(system_prompt, user_prompt, model, temperature, max_tokens, json_mode, thinking)
 
     async def _call_openai_compatible(
         self, system_prompt: str, user_prompt: str, model: str,
-        temperature: float, max_tokens: int, json_mode: bool
+        temperature: float, max_tokens: int, json_mode: bool,
+        thinking: bool | None = None,
     ) -> str:
-        """OpenAI 兼容 API 调用"""
+        """OpenAI 兼容 API 调用，支持思考模式"""
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -118,6 +122,12 @@ class AIService:
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
+
+        # 思考模式控制
+        use_thinking = thinking if thinking is not None else settings.AI_THINKING_ENABLED
+        if use_thinking:
+            kwargs["reasoning_effort"] = settings.AI_THINKING_EFFORT
+            kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
 
         if json_mode:
             try:
@@ -144,20 +154,29 @@ class AIService:
 
     async def _call_anthropic(
         self, system_prompt: str, user_prompt: str, model: str,
-        temperature: float, max_tokens: int, json_mode: bool
+        temperature: float, max_tokens: int, json_mode: bool,
+        thinking: bool | None = None,
     ) -> str:
-        """Anthropic Claude API 调用"""
+        """Anthropic Claude API 调用，支持思考模式"""
         # Claude 使用 system 参数而非 system message
         if json_mode:
             system_prompt += "\n\n请严格以 JSON 格式返回结果，不要包含任何其他文本。"
 
-        response = await self.client.messages.create(
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}],
-        )
+        kwargs = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "system": system_prompt,
+            "messages": [{"role": "user", "content": user_prompt}],
+        }
+
+        # Anthropic 思考模式
+        use_thinking = thinking if thinking is not None else settings.AI_THINKING_ENABLED
+        if use_thinking:
+            kwargs["thinking"] = {"type": "enabled"}
+            kwargs["output_config"] = {"effort": settings.AI_THINKING_EFFORT}
+
+        response = await self.client.messages.create(**kwargs)
 
         return response.content[0].text if response.content else ""
 
@@ -249,17 +268,31 @@ class AIService:
         elapsed_time: str = "",
         target_duration: str = "",
         characters_status: str = "",
+        game_memory: str = "",
+        character_name: str = "",
+        recent_events: str = "",
     ) -> dict:
         system_prompt = f"""你是一个跑团主持人（DM）。玩家正在你的游戏中行动，你需要评估每个行动的等待时间和公开描述。
 
-当前游戏状态：
+===== 故事背景与游戏记忆 =====
+{game_memory}
+
+===== 当前游戏状态 =====
 - 场景：{scene}
 - 当前章节：第{chapter}章（{chapter_title}），目标：{chapter_goal}
 - 已过时间：{elapsed_time} / {target_duration}
-- 队伍状态：
+
+===== 队伍状态 =====
 {characters_status}
 
-行动评估规则：
+===== 最近发生的事件 =====
+{recent_events}
+
+===== 行动角色 =====
+- 名称：{character_name}
+- 当前状态：{character_status}
+
+===== 行动评估规则 =====
 
 等待时间（秒）：
 - 简单动作（说话、观察、拿取物品）：5-30 秒
@@ -277,6 +310,8 @@ class AIService:
 - 与 NPC 互动：low~medium risk
 - 使用已知安全物品：none risk
 - 尝试危险动作（攀爬、战斗）：high~critical risk
+
+重要：你必须充分考虑角色的当前状态、已发生事件的上下文、以及故事的整体进展来评估行动。不要孤立地看待这一次行动。
 
 返回严格的 JSON：
 {{
@@ -299,32 +334,49 @@ class AIService:
         game_memory: str = "",
         current_scene: str = "",
         character_status: str = "",
+        all_characters_status: str = "",
+        chapter_info: str = "",
+        recent_events: str = "",
+        story_summary: str = "",
     ) -> dict:
         system_prompt = f"""你是一个才华横溢的跑团主持人（DM），擅长讲述引人入胜的故事。
 
-你现在需要根据玩家的行动和当前游戏状态，生成行动结果的叙事。
+===== 故事背景 =====
+{story_summary}
 
-游戏记忆（最近事件摘要）：
+===== 游戏记忆（关键事件摘要）=====
 {game_memory}
 
-当前场景：{current_scene}
-角色状态：
-{character_status}
+===== 当前章节 =====
+{chapter_info}
 
-行动详情：
-- 角色：{character_name}
-- 行动：{action_text}
+===== 当前场景 =====
+{current_scene}
+
+===== 最近发生的事件（按时间顺序）=====
+{recent_events}
+
+===== 队伍全员状态 =====
+{all_characters_status}
+
+===== 行动角色详情 =====
+- 名称：{character_name}
+- 当前状态：{character_status}
+
+===== 本次行动 =====
+- 行动描述：{action_text}
 - 等待时长：{wait_seconds} 秒
 - 难度：{difficulty}
 - 风险：{risk}
 
-叙事要求：
-1. 结果应与行动的难度和风险匹配
-2. 高风险行动可能导致负面后果（受伤、失去物品等）
-3. 叙事应生动、有画面感，像小说一样
-4. 可以引入新的线索、物品、NPC 互动
-5. 长度 150-400 字
-6. 判断是否触发章节推进或游戏结局
+===== 叙事要求 =====
+1. **连贯性**：叙事必须与之前的事件逻辑连贯。如果角色之前受伤了，行动应该受影响；如果之前发现了线索，应该能用上。
+2. **角色状态感知**：充分考虑角色的血量、物品、受伤状态。受伤的角色行动应更艰难，有合适工具的角色应有优势。
+3. **世界一致性**：场景中已描述的元素、已发现的秘密、已建立的 NPC 关系都应该被记住和引用。
+4. **结果匹配难度**：高风险行动可能导致负面后果（受伤、失去物品等），简单行动不应有过于戏剧化的结果。
+5. **叙事质量**：生动、有画面感，像小说一样。长度 200-500 字。
+6. **推进故事**：可以引入新的线索、物品、NPC 互动。判断是否触发章节推进或游戏结局。
+7. **团队影响**：考虑行动对队伍其他成员的影响，是否需要其他人配合或会产生连锁反应。
 
 返回严格的 JSON：
 {{
@@ -353,9 +405,9 @@ class AIService:
   "public_broadcast": true
 }}"""
 
-        # 叙事生成需要高质量模型
+        # 叙事生成需要高质量模型 + 思考模式
         return await self.call_json(
-            system_prompt, f"玩家行动：{action_text}", temperature=0.8, premium=True
+            system_prompt, f"玩家行动：{action_text}", temperature=0.8, premium=True, thinking=True
         )
 
     async def evaluate_cooperation(
@@ -403,14 +455,26 @@ class AIService:
 
         return await self.call_json(system_prompt, f"协作描述：{cooperation_text}", temperature=0.2)
 
-    async def compress_memory(self, recent_events: str, characters_status: str) -> str:
-        system_prompt = """请将以下游戏事件压缩为简洁的摘要，保留关键信息（角色状态变化、重要发现、场景变化）。
+    async def compress_memory(self, recent_events: str, characters_status: str, story_summary: str = "") -> dict:
+        system_prompt = """你是一个跑团记录员。请将以下游戏事件压缩为结构化的记忆摘要，供后续 AI 主持人使用。
 
-输出 100-200 字的摘要，用于后续 AI 调用的上下文。"""
+要求：
+1. 保留所有关键信息：角色状态变化、重要发现、场景变化、NPC 关系变化
+2. 按时间线梳理事件因果关系
+3. 标记未解决的悬念和线索
+4. 记录角色之间的互动关系
+
+返回严格的 JSON：
+{
+  "memory_summary": "200-400字的整体游戏进展摘要",
+  "key_facts": ["关键事实1", "关键事实2", ...],
+  "pending_threads": ["未解决的悬念/线索1", ...],
+  "character_relationships": "角色间关系简述"
+}"""
 
         result = await self.call_json(
             system_prompt,
-            f"最近事件：\n{recent_events}\n\n当前角色状态：\n{characters_status}",
+            f"故事背景：\n{story_summary}\n\n最近事件：\n{recent_events}\n\n当前角色状态：\n{characters_status}",
             temperature=0.3,
         )
-        return result.get("summary", "")
+        return result

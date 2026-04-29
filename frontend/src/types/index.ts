@@ -142,4 +142,6 @@ export interface AdminSettings {
   AI_MODEL_PREMIUM: string;
   MAX_TOKENS: number;
   MAX_TOKENS_DEFAULT: number;
+  AI_THINKING_ENABLED: boolean;
+  AI_THINKING_EFFORT: string;
 }

@@ -41,12 +41,13 @@ vim .env   # 填入 AI API Key、数据库密码等
 
 # 3. 一键部署
 chmod +x deploy.sh
-./deploy.sh
+./deploy.sh              # 海外服务器
+./deploy.sh --mirror     # 国内服务器（自动配置镜像加速）
 ```
 
 部署完成后访问 `http://你的服务器IP` 即可。
 
-> 详细部署指南见 [部署教程.md](部署教程.md)
+> 国内服务器加 `--mirror` 自动配置 Docker/npm/pip 镜像加速。详见 [部署教程.md](部署教程.md)
 
 ### 方式二：本地开发
 

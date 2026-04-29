@@ -15,6 +15,8 @@ NC='\033[0m'
 COMPOSE_FILE="docker-compose.prod.yml"
 BACKUP_DIR="/home/$(whoami)/backups"
 
+MIRROR_MODE=false
+
 log_info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
@@ -26,6 +28,76 @@ echo "   AI 叙事跑团游戏 - 一键部署"
 echo "   https://github.com/xpxp23/airpg"
 echo "=========================================="
 echo ""
+
+# 解析参数
+for arg in "$@"; do
+    case $arg in
+        --mirror) MIRROR_MODE=true ;;
+        --help|-h)
+            echo "用法: ./deploy.sh [选项]"
+            echo ""
+            echo "选项:"
+            echo "  --mirror    使用国内镜像源（阿里云）加速下载"
+            echo "  --help      显示帮助信息"
+            exit 0
+            ;;
+    esac
+done
+
+# ----- 配置国内镜像 -----
+setup_mirrors() {
+    log_step "配置国内镜像源..."
+
+    # Docker 镜像加速
+    if [ ! -f /etc/docker/daemon.json ] || ! grep -q "registry-mirrors" /etc/docker/daemon.json 2>/dev/null; then
+        sudo mkdir -p /etc/docker
+        sudo tee /etc/docker/daemon.json > /dev/null <<'DEOFE'
+{
+  "registry-mirrors": [
+    "https://mirror.ccs.tencentyun.com",
+    "https://docker.m.daocloud.io",
+    "https://huecker.io"
+  ]
+}
+DEOFE
+        sudo systemctl daemon-reload
+        sudo systemctl restart docker
+        log_info "Docker 镜像加速已配置"
+    else
+        log_info "Docker 镜像加速已存在，跳过"
+    fi
+
+    # 创建 npm 镜像 Dockerfile 覆盖文件
+    cat > frontend/.npmrc <<'EOF'
+registry=https://registry.npmmirror.com
+EOF
+
+    # 创建 pip 镜像配置
+    mkdir -p backend/pip-conf
+    cat > backend/pip-conf/pip.conf <<'EOF'
+[global]
+index-url = https://mirrors.aliyun.com/pypi/simple/
+trusted-host = mirrors.aliyun.com
+EOF
+
+    # 修改 backend Dockerfile 使用国内 pip 源
+    if ! grep -q "pip-conf" backend/Dockerfile 2>/dev/null; then
+        sed -i 's|COPY requirements.txt .|COPY pip-conf/pip.conf /etc/pip.conf\nCOPY requirements.txt .|' backend/Dockerfile
+        log_info "pip 镜像源已配置"
+    fi
+
+    # 修改 frontend Dockerfile 使用国内 npm 源
+    if ! grep -q ".npmrc" frontend/Dockerfile 2>/dev/null; then
+        sed -i 's|COPY package.json package-lock.json\* ./|COPY package.json package-lock.json* ./\nCOPY .npmrc ./|' frontend/Dockerfile
+        log_info "npm 镜像源已配置"
+    fi
+
+    log_info "国内镜像源配置完成"
+}
+
+if [ "$MIRROR_MODE" = true ]; then
+    setup_mirrors
+fi
 
 # ----- 前置检查 -----
 
@@ -213,6 +285,9 @@ echo ""
 echo "  前端:   http://$IP"
 echo "  API:    http://$IP:8000"
 echo "  文档:   http://$IP:8000/docs"
+if [ "$MIRROR_MODE" = true ]; then
+    echo "  镜像:   已启用国内加速源"
+fi
 echo ""
 echo "  服务状态: docker compose -f $COMPOSE_FILE ps"
 echo "  查看日志: docker compose -f $COMPOSE_FILE logs -f"

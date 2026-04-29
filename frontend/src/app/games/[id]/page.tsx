@@ -226,9 +226,20 @@ export default function GameRoomPage() {
           </h1>
 
           {game.parse_status === "processing" && (
-            <div className="bg-fantasy-accent/10 border border-fantasy-accent/20 rounded-lg px-4 py-3 mb-4 flex items-center space-x-3">
-              <div className="animate-spin w-5 h-5 border-2 border-fantasy-accent border-t-transparent rounded-full" />
-              <span className="text-fantasy-accent text-sm">AI 正在解析故事文本，请稍候...</span>
+            <div className="bg-fantasy-accent/10 border border-fantasy-accent/20 rounded-lg px-4 py-3 mb-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="animate-spin w-5 h-5 border-2 border-fantasy-accent border-t-transparent rounded-full" />
+                  <span className="text-fantasy-accent text-sm">AI 正在解析故事文本，请稍候...</span>
+                </div>
+                <button
+                  onClick={handleRetryParse}
+                  disabled={retrying}
+                  className="text-fantasy-muted hover:text-fantasy-accent text-xs transition-colors"
+                >
+                  重新解析
+                </button>
+              </div>
             </div>
           )}
 
@@ -256,11 +267,22 @@ export default function GameRoomPage() {
           )}
 
           {game.parse_status === "pending" && (
-            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-4 py-3 mb-4 flex items-center space-x-3">
-              <span className="text-yellow-400 text-lg">⏳</span>
-              <div>
-                <p className="text-yellow-400 text-sm font-medium">等待解析</p>
-                <p className="text-yellow-400/60 text-xs mt-1">故事文本正在排队等待解析</p>
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-4 py-3 mb-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <span className="text-yellow-400 text-lg">⏳</span>
+                  <div>
+                    <p className="text-yellow-400 text-sm font-medium">等待解析</p>
+                    <p className="text-yellow-400/60 text-xs mt-1">故事文本正在排队等待解析</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleRetryParse}
+                  disabled={retrying}
+                  className="bg-yellow-500/20 hover:bg-yellow-500/30 disabled:opacity-50 text-yellow-400 px-4 py-2 rounded-lg text-sm transition-colors"
+                >
+                  {retrying ? "解析中..." : "开始解析"}
+                </button>
               </div>
             </div>
           )}

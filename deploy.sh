@@ -37,7 +37,7 @@ for arg in "$@"; do
             echo "用法: ./deploy.sh [选项]"
             echo ""
             echo "选项:"
-            echo "  --mirror    使用国内镜像源（阿里云）加速下载"
+            echo "  --mirror    使用国内镜像源加速（Docker/apt/apk/npm/pip）"
             echo "  --help      显示帮助信息"
             exit 0
             ;;
@@ -48,7 +48,7 @@ done
 setup_mirrors() {
     log_step "配置国内镜像源..."
 
-    # Docker 镜像加速
+    # 1. Docker 镜像加速
     if [ ! -f /etc/docker/daemon.json ] || ! grep -q "registry-mirrors" /etc/docker/daemon.json 2>/dev/null; then
         sudo mkdir -p /etc/docker
         sudo tee /etc/docker/daemon.json > /dev/null <<'DEOFE'
@@ -67,29 +67,106 @@ DEOFE
         log_info "Docker 镜像加速已存在，跳过"
     fi
 
-    # 创建 npm 镜像 Dockerfile 覆盖文件
-    cat > frontend/.npmrc <<'EOF'
-registry=https://registry.npmmirror.com
+    # 2. 宿主机 apt 镜像（Debian/Ubuntu）
+    if [ -f /etc/debian_version ]; then
+        if ! grep -q "mirrors.aliyun.com" /etc/apt/sources.list 2>/dev/null; then
+            CODENAME=$(. /etc/os-release && echo "$VERSION_CODENAME")
+            if [ -n "$CODENAME" ]; then
+                sudo cp /etc/apt/sources.list /etc/apt/sources.list.bak.$(date +%s)
+                sudo tee /etc/apt/sources.list > /dev/null <<EOF
+deb https://mirrors.aliyun.com/debian/ ${CODENAME} main contrib non-free non-free-firmware
+deb https://mirrors.aliyun.com/debian/ ${CODENAME}-updates main contrib non-free non-free-firmware
+deb https://mirrors.aliyun.com/debian-security ${CODENAME}-security main contrib non-free non-free-firmware
 EOF
+                sudo apt-get update -qq
+                log_info "宿主机 apt 镜像已配置 (${CODENAME})"
+            fi
+        else
+            log_info "宿主机 apt 镜像已存在，跳过"
+        fi
+    fi
 
-    # 创建 pip 镜像配置
-    mkdir -p backend/pip-conf
-    cat > backend/pip-conf/pip.conf <<'EOF'
+    # 3. 后端 Dockerfile: pip 镜像 + Debian apt 镜像
+    if [ -f backend/Dockerfile ]; then
+        # 创建 pip 配置
+        mkdir -p backend/pip-conf
+        cat > backend/pip-conf/pip.conf <<'EOF'
 [global]
 index-url = https://mirrors.aliyun.com/pypi/simple/
 trusted-host = mirrors.aliyun.com
 EOF
 
-    # 修改 backend Dockerfile 使用国内 pip 源
-    if ! grep -q "pip-conf" backend/Dockerfile 2>/dev/null; then
-        sed -i 's|COPY requirements.txt .|COPY pip-conf/pip.conf /etc/pip.conf\nCOPY requirements.txt .|' backend/Dockerfile
-        log_info "pip 镜像源已配置"
+        # 备份原 Dockerfile
+        cp backend/Dockerfile backend/Dockerfile.bak 2>/dev/null || true
+
+        # 重写 Dockerfile，注入 apt 镜像和 pip 镜像
+        cat > backend/Dockerfile <<'DEOF'
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# 使用阿里云 Debian 镜像加速 apt
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
+    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null || true
+RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
+
+COPY pip-conf/pip.conf /etc/pip.conf
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+DEOF
+        log_info "后端 Dockerfile 已配置 apt + pip 镜像"
     fi
 
-    # 修改 frontend Dockerfile 使用国内 npm 源
-    if ! grep -q ".npmrc" frontend/Dockerfile 2>/dev/null; then
-        sed -i 's|COPY package.json package-lock.json\* ./|COPY package.json package-lock.json* ./\nCOPY .npmrc ./|' frontend/Dockerfile
-        log_info "npm 镜像源已配置"
+    # 4. 前端 Dockerfile: npm 镜像 + Alpine apk 镜像
+    if [ -f frontend/Dockerfile ]; then
+        # 创建 npm 配置
+        cat > frontend/.npmrc <<'EOF'
+registry=https://registry.npmmirror.com
+EOF
+
+        # 备份原 Dockerfile
+        cp frontend/Dockerfile frontend/Dockerfile.bak 2>/dev/null || true
+
+        # 重写 Dockerfile，注入 apk 镜像和 npm 镜像
+        cat > frontend/Dockerfile <<'DEOF'
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# 使用阿里云 Alpine 镜像加速 apk
+RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g' /etc/apk/repositories
+RUN apk add --no-cache libc6-compat
+
+COPY .npmrc ./
+COPY package.json package-lock.json* ./
+RUN npm ci
+
+COPY . .
+RUN npm run build
+
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+
+RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g' /etc/apk/repositories
+
+ENV NODE_ENV=production
+
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
+
+EXPOSE 3000
+
+CMD ["node", "server.js"]
+DEOF
+        log_info "前端 Dockerfile 已配置 apk + npm 镜像"
     fi
 
     log_info "国内镜像源配置完成"

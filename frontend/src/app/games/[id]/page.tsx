@@ -101,6 +101,16 @@ export default function GameRoomPage() {
     }
   };
 
+  const handleEndGame = async () => {
+    if (!confirm("确定要结束本局游戏吗？")) return;
+    try {
+      await api.endGame(gameId);
+      refresh();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
   const getEventDisplay = (event: GameEvent) => {
     const { type, data } = event;
     switch (type) {
@@ -380,12 +390,22 @@ export default function GameRoomPage() {
               第 {game.current_chapter} 章 · {characters.filter((c) => c.is_alive).length} 名冒险者存活
             </div>
           </div>
-          <button
-            onClick={() => setShowCharacters(!showCharacters)}
-            className="shrink-0 bg-fantasy-card hover:bg-fantasy-card/80 text-fantasy-text/80 px-3 py-1.5 rounded-lg text-xs transition-colors"
-          >
-             角色
-          </button>
+          <div className="shrink-0 flex items-center gap-2">
+            {game.creator_id === user.id && (
+              <button
+                onClick={handleEndGame}
+                className="bg-red-500/10 hover:bg-red-500/20 text-red-400 px-3 py-1.5 rounded-lg text-xs transition-colors"
+              >
+                结束本局
+              </button>
+            )}
+            <button
+              onClick={() => setShowCharacters(!showCharacters)}
+              className="bg-fantasy-card hover:bg-fantasy-card/80 text-fantasy-text/80 px-3 py-1.5 rounded-lg text-xs transition-colors"
+            >
+               角色
+            </button>
+          </div>
         </div>
 
         {/* Events stream */}

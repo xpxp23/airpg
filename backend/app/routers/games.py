@@ -182,6 +182,27 @@ async def disband_game(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.post("/{game_id}/end", response_model=GameResponse)
+async def end_game(
+    game_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    game_service = GameService(db)
+    game = await game_service.get_game(game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    if game.creator_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only creator can end the game")
+    if game.status not in (GameStatus.ACTIVE, GameStatus.PAUSED):
+        raise HTTPException(status_code=400, detail="Game is not active")
+    try:
+        game = await game_service.end_game(game_id, "房主结束了游戏")
+        return _game_to_response(game)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/{game_id}/events", response_model=EventListResponse)
 async def get_events(
     game_id: str,

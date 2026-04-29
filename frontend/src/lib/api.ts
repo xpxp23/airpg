@@ -117,6 +117,12 @@ class ApiClient {
     });
   }
 
+  async endGame(gameId: string): Promise<Game> {
+    return this.request(`/games/${gameId}/end`, {
+      method: "POST",
+    });
+  }
+
   async getEvents(gameId: string, since?: string): Promise<{ events: GameEvent[]; has_more: boolean }> {
     const params = since ? `?since=${since}` : "";
     return this.request(`/games/${gameId}/events${params}`);

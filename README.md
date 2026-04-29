@@ -4,6 +4,8 @@
 
 一款 AI 驱动的多人异步叙事跑团游戏。玩家上传故事文本，AI 担任主持人，多人在碎片化时间里协作冒险。
 
+仓库地址：https://github.com/xpxp23/airpg
+
 ## 核心玩法
 
 ```
@@ -26,22 +28,39 @@
 
 ## 快速开始
 
-### 1. 环境准备
-
-- Docker & Docker Compose
-- Node.js 18+
-- Python 3.11+
-- 一个 AI API Key（OpenAI / DeepSeek / 通义千问等均可）
-
-### 2. 启动数据库
+### 方式一：云服务器部署（推荐）
 
 ```bash
-docker compose up -d
+# 1. 克隆项目
+git clone https://github.com/xpxp23/airpg.git /opt/airpg
+cd /opt/airpg
+
+# 2. 配置环境变量
+cp .env.example .env
+vim .env   # 填入 AI API Key、数据库密码等
+
+# 3. 一键部署
+chmod +x deploy.sh
+./deploy.sh
 ```
 
-### 3. 启动后端
+部署完成后访问 `http://你的服务器IP` 即可。
+
+> 详细部署指南见 [部署教程.md](部署教程.md)
+
+### 方式二：本地开发
+
+**前置条件：** Docker、Node.js 18+、Python 3.11+
 
 ```bash
+# 1. 克隆项目
+git clone https://github.com/xpxp23/airpg.git
+cd airpg
+
+# 2. 启动数据库
+docker compose up -d
+
+# 3. 启动后端
 cd backend
 python -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
@@ -52,10 +71,9 @@ uvicorn app.main:app --reload
 
 后端运行在 `http://localhost:8000`，API 文档：`http://localhost:8000/docs`
 
-### 4. 启动前端
-
 ```bash
-cd frontend
+# 4. 启动前端
+cd ../frontend
 npm install
 npm run dev
 ```
@@ -74,15 +92,16 @@ AI_MODEL_DEFAULT=gpt-4o-mini              # 低成本任务
 AI_MODEL_PREMIUM=gpt-4o                   # 叙事生成
 ```
 
-常见配置：
-
-| 服务 | AI_BASE_URL | AI_MODEL_DEFAULT |
-|------|-------------|------------------|
-| OpenAI 官方 | `https://api.openai.com/v1` | `gpt-4o-mini` |
-| DeepSeek | `https://api.deepseek.com/v1` | `deepseek-chat` |
-| 通义千问 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `qwen-turbo` |
-| Moonshot | `https://api.moonshot.cn/v1` | `moonshot-v1-8k` |
-| 本地 Ollama | `http://localhost:11434/v1` | `qwen2.5:7b` |
+| 服务 | AI_BASE_URL | AI_MODEL_DEFAULT | AI_MODEL_PREMIUM |
+|------|-------------|------------------|------------------|
+| OpenAI 官方 | `https://api.openai.com/v1` | `gpt-4o-mini` | `gpt-4o` |
+| DeepSeek | `https://api.deepseek.com/v1` | `deepseek-chat` | `deepseek-chat` |
+| 通义千问 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `qwen-turbo` | `qwen-plus` |
+| Moonshot | `https://api.moonshot.cn/v1` | `moonshot-v1-8k` | `moonshot-v1-32k` |
+| 智谱 GLM | `https://open.bigmodel.cn/api/paas/v4` | `glm-4-flash` | `glm-4` |
+| 零一万物 | `https://api.lingyiwanwu.com/v1` | `yi-lightning` | `yi-large` |
+| 本地 Ollama | `http://localhost:11434/v1` | `qwen2.5:7b` | `qwen2.5:14b` |
+| 本地 vLLM | `http://localhost:8000/v1` | 自选模型 | 自选模型 |
 
 ## 项目结构
 
@@ -102,7 +121,11 @@ AI_MODEL_PREMIUM=gpt-4o                   # 叙事生成
 │       ├── components/         # 组件
 │       ├── hooks/              # 状态管理
 │       └── lib/                # API 客户端
+├── nginx/                      # Nginx 配置
 ├── docker-compose.yml          # 开发环境
+├── docker-compose.prod.yml     # 生产环境
+├── deploy.sh                   # 一键部署脚本
+├── 部署教程.md                  # 完整部署指南
 └── .env.example                # 环境变量模板
 ```
 
@@ -112,16 +135,21 @@ AI_MODEL_PREMIUM=gpt-4o                   # 叙事生成
 |------|------|------|
 | POST | `/api/v1/auth/register` | 注册 |
 | POST | `/api/v1/auth/login` | 登录 |
+| GET  | `/api/v1/auth/me` | 当前用户信息 |
 | POST | `/api/v1/games` | 创建游戏 |
+| GET  | `/api/v1/games` | 游戏列表 |
+| GET  | `/api/v1/games/{id}` | 游戏详情 |
 | POST | `/api/v1/games/{id}/join` | 加入游戏 |
 | POST | `/api/v1/games/{id}/start` | 开始游戏 |
 | POST | `/api/v1/games/{id}/actions` | 提交行动 |
 | POST | `/api/v1/games/{id}/cooperation` | 发起协作 |
-| GET | `/api/v1/games/{id}/events` | 获取事件流 |
+| GET  | `/api/v1/games/{id}/events` | 获取事件流 |
+| GET  | `/api/v1/games/{id}/characters` | 获取角色列表 |
 
 ## 部署
 
-详见 [部署教程.md](部署教程.md)
+- **一键部署**：`chmod +x deploy.sh && ./deploy.sh`
+- **完整指南**：[部署教程.md](部署教程.md)（含手动部署、HTTPS 配置、运维命令、常见问题）
 
 ## 许可证
 

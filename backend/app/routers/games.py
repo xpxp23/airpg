@@ -10,6 +10,7 @@ from app.schemas.event import EventResponse, EventListResponse
 from app.services.game_service import GameService
 from app.dependencies import get_current_user
 from app.models.user import User
+from app.models.game import GameStatus
 
 logger = logging.getLogger(__name__)
 

@@ -45,7 +45,7 @@ chmod +x deploy.sh
 ./deploy.sh --mirror     # 国内服务器（自动配置镜像加速）
 ```
 
-部署完成后访问 `http://你的服务器IP` 即可。
+部署完成后访问 `http://你的服务器IP:55888` 即可。
 
 > 国内服务器加 `--mirror` 自动配置 Docker/npm/pip 镜像加速。详见 [部署教程.md](部署教程.md)
 

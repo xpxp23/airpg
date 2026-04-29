@@ -369,7 +369,7 @@ echo "=========================================="
 echo -e "   ${GREEN}部署完成!${NC}"
 echo "=========================================="
 echo ""
-echo "  前端:   http://$IP"
+echo "  前端:   http://$IP:55888"
 echo "  API:    http://$IP:8000"
 echo "  文档:   http://$IP:8000/docs"
 if [ "$MIRROR_MODE" = true ]; then

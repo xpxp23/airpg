@@ -27,6 +27,8 @@ export interface Game {
   player_count: number;
   uploaded_story?: string;
   ai_summary?: AISummary;
+  parse_status: "pending" | "processing" | "completed" | "failed";
+  parse_error?: string;
   duration_hint?: string;
   target_duration_minutes?: number;
 }

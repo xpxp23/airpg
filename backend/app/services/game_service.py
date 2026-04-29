@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from app.models import Game, GameStatus, Character, User, Event, EventType
+from app.models import Game, GameStatus, ParseStatus, Character, User, Event, EventType
 from app.schemas.game import GameCreate, GameResponse, GameDetailResponse
 from app.services.ai_service import AIService
 
@@ -33,6 +33,7 @@ class GameService:
             max_players=data.max_players,
             is_public=data.is_public,
             invite_code=self._generate_invite_code(),
+            parse_status=ParseStatus.PENDING,
         )
         self.db.add(game)
         await self.db.commit()
@@ -62,13 +63,34 @@ class GameService:
         if not game:
             raise ValueError("Game not found")
 
-        summary = await self.ai_service.parse_story(game.uploaded_story, game.duration_hint)
-
-        game.ai_summary = summary
-        if summary.get("title") and not game.title:
-            game.title = summary["title"]
+        # Update status to processing
+        game.parse_status = ParseStatus.PROCESSING
+        game.parse_error = None
         await self.db.commit()
-        return summary
+
+        try:
+            summary = await self.ai_service.parse_story(game.uploaded_story, game.duration_hint)
+
+            game.ai_summary = summary
+            game.parse_status = ParseStatus.COMPLETED
+            if summary.get("title") and not game.title:
+                game.title = summary["title"]
+            await self.db.commit()
+            return summary
+        except Exception as e:
+            game.parse_status = ParseStatus.FAILED
+            game.parse_error = str(e)[:500]  # Limit error message length
+            await self.db.commit()
+            raise
+
+    async def retry_parse_story(self, game_id: str) -> dict:
+        """Retry story parsing for failed or pending games."""
+        game = await self.get_game(game_id)
+        if not game:
+            raise ValueError("Game not found")
+        if game.parse_status == ParseStatus.COMPLETED:
+            raise ValueError("Story already parsed successfully")
+        return await self.parse_story(game_id)
 
     async def get_game(self, game_id: str) -> Game | None:
         result = await self.db.execute(select(Game).where(Game.id == game_id))

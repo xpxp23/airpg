@@ -171,6 +171,13 @@ class ApiClient {
       }),
     });
   }
+
+  // Parse
+  async retryParse(gameId: string): Promise<Game> {
+    return this.request(`/games/${gameId}/retry-parse`, {
+      method: "POST",
+    });
+  }
 }
 
 export const api = new ApiClient();

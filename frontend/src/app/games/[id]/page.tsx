@@ -33,6 +33,7 @@ export default function GameRoomPage() {
   const [showCharacters, setShowCharacters] = useState(false);
   const [joining, setJoining] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const eventsEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -85,6 +86,18 @@ export default function GameRoomPage() {
       alert(err.message);
     } finally {
       setStarting(false);
+    }
+  };
+
+  const handleRetryParse = async () => {
+    setRetrying(true);
+    try {
+      await api.retryParse(gameId);
+      refresh();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setRetrying(false);
     }
   };
 
@@ -200,10 +213,43 @@ export default function GameRoomPage() {
             {game.title || "准备中..."}
           </h1>
 
-          {!game.ai_summary && (
+          {game.parse_status === "processing" && (
             <div className="bg-fantasy-accent/10 border border-fantasy-accent/20 rounded-lg px-4 py-3 mb-4 flex items-center space-x-3">
               <div className="animate-spin w-5 h-5 border-2 border-fantasy-accent border-t-transparent rounded-full" />
               <span className="text-fantasy-accent text-sm">AI 正在解析故事文本，请稍候...</span>
+            </div>
+          )}
+
+          {game.parse_status === "failed" && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 mb-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <span className="text-red-400 text-lg">⚠️</span>
+                  <div>
+                    <p className="text-red-400 text-sm font-medium">AI 解析失败</p>
+                    <p className="text-red-400/60 text-xs mt-1">
+                      {game.parse_error || "故事文本解析过程中出现错误"}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleRetryParse}
+                  disabled={retrying}
+                  className="bg-red-500/20 hover:bg-red-500/30 disabled:opacity-50 text-red-400 px-4 py-2 rounded-lg text-sm transition-colors"
+                >
+                  {retrying ? "重试中..." : "重新解析"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {game.parse_status === "pending" && (
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-4 py-3 mb-4 flex items-center space-x-3">
+              <span className="text-yellow-400 text-lg">⏳</span>
+              <div>
+                <p className="text-yellow-400 text-sm font-medium">等待解析</p>
+                <p className="text-yellow-400/60 text-xs mt-1">故事文本正在排队等待解析</p>
+              </div>
             </div>
           )}
           <p className="text-fantasy-muted mb-6">
@@ -229,7 +275,7 @@ export default function GameRoomPage() {
             <h2 className="text-lg font-semibold text-fantasy-text mb-4">
               选择角色 ({characters.length}/{game.max_players})
             </h2>
-            {!game.ai_summary ? (
+            {game.parse_status !== "completed" ? (
               <p className="text-fantasy-muted text-sm">等待 AI 解析完成后可选择角色...</p>
             ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -296,10 +342,10 @@ export default function GameRoomPage() {
             <div className="space-y-3">
               <button
                 onClick={handleStart}
-                disabled={!game.ai_summary || characters.length === 0 || starting}
+                disabled={game.parse_status !== "completed" || characters.length === 0 || starting}
                 className="w-full bg-fantasy-accent hover:bg-fantasy-accent/80 disabled:bg-fantasy-accent/50 disabled:cursor-not-allowed text-white py-4 rounded-lg text-lg font-semibold transition-colors shadow-lg shadow-fantasy-accent/25"
               >
-                {starting ? "启动中..." : !game.ai_summary ? "等待 AI 解析完成..." : characters.length === 0 ? "等待玩家加入..." : "开始游戏"}
+                {starting ? "启动中..." : game.parse_status === "pending" ? "等待解析开始..." : game.parse_status === "processing" ? "等待 AI 解析完成..." : game.parse_status === "failed" ? "解析失败，请重试" : characters.length === 0 ? "等待玩家加入..." : "开始游戏"}
               </button>
               <button
                 onClick={handleDisband}

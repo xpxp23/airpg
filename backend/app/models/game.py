@@ -15,6 +15,13 @@ class GameStatus(str, enum.Enum):
     ABANDONED = "abandoned"
 
 
+class ParseStatus(str, enum.Enum):
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 class Game(Base):
     __tablename__ = "games"
 
@@ -32,6 +39,10 @@ class Game(Base):
         Enum(GameStatus), default=GameStatus.LOBBY, nullable=False
     )
     ai_summary: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    parse_status: Mapped[ParseStatus] = mapped_column(
+        Enum(ParseStatus), default=ParseStatus.PENDING, nullable=False
+    )
+    parse_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     current_chapter: Mapped[int] = mapped_column(Integer, default=1)
     max_players: Mapped[int] = mapped_column(Integer, default=6)
     is_public: Mapped[bool] = mapped_column(Boolean, default=False)

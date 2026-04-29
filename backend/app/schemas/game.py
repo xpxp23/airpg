@@ -28,6 +28,7 @@ class GameResponse(BaseModel):
     finished_at: datetime | None = None
     created_at: datetime
     player_count: int = 0
+    parse_status: str = "pending"
 
     class Config:
         from_attributes = True
@@ -36,6 +37,8 @@ class GameResponse(BaseModel):
 class GameDetailResponse(GameResponse):
     uploaded_story: str
     ai_summary: dict | None = None
+    parse_status: str = "pending"
+    parse_error: str | None = None
     duration_hint: str | None = None
     target_duration_minutes: int | None = None
 

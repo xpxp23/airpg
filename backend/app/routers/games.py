@@ -30,6 +30,7 @@ def _game_to_response(game, player_count: int = 0) -> GameResponse:
         finished_at=game.finished_at,
         created_at=game.created_at,
         player_count=player_count,
+        parse_status=game.parse_status.value if hasattr(game.parse_status, "value") else game.parse_status,
     )
 
 
@@ -107,6 +108,8 @@ async def get_game(
         created_at=game.created_at,
         uploaded_story=game.uploaded_story,
         ai_summary=game.ai_summary,
+        parse_status=game.parse_status.value if hasattr(game.parse_status, "value") else game.parse_status,
+        parse_error=game.parse_error,
         duration_hint=game.duration_hint,
         target_duration_minutes=game.target_duration_minutes,
         player_count=player_count,
@@ -233,3 +236,20 @@ async def get_characters(
         )
         for c in characters
     ]
+
+
+@router.post("/{game_id}/retry-parse", response_model=GameResponse)
+async def retry_parse_story(
+    game_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    game_service = GameService(db)
+    game = await game_service.get_game(game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    if game.creator_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only creator can retry parsing")
+
+    asyncio.create_task(_parse_story_background(game.id))
+    return _game_to_response(game)

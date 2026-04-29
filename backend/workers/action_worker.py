@@ -5,7 +5,7 @@ In production, consider using Celery with Redis broker.
 """
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from app.config import get_settings
@@ -25,7 +25,7 @@ async def check_pending_actions():
         result = await db.execute(
             select(Action).where(
                 Action.status == ActionStatus.PENDING,
-                Action.finish_at <= datetime.utcnow(),
+                Action.finish_at <= datetime.now(timezone.utc),
             )
         )
         actions = list(result.scalars().all())

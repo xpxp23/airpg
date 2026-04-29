@@ -1,7 +1,7 @@
 import uuid
 import string
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -268,7 +268,7 @@ class GameService:
             raise ValueError("AI is still parsing the story, please wait")
 
         game.status = GameStatus.ACTIVE
-        game.started_at = datetime.utcnow()
+        game.started_at = datetime.now(timezone.utc)
 
         # Add game start event with opening narrative
         opening = ""
@@ -370,7 +370,7 @@ class GameService:
             raise ValueError("Game not found")
 
         game.status = GameStatus.FINISHED
-        game.finished_at = datetime.utcnow()
+        game.finished_at = datetime.now(timezone.utc)
 
         event = Event(
             id=str(uuid.uuid4()),

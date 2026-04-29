@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Action, ActionStatus, ActionType, Character, Game, GameStatus, Event, EventType
@@ -77,7 +77,7 @@ class ActionService:
             }
 
         wait_seconds = eval_result.get("wait_seconds", 60)
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         finish_at = now + timedelta(seconds=wait_seconds)
 
         action = Action(
@@ -145,7 +145,7 @@ class ActionService:
 
         # Update action
         action.status = ActionStatus.COMPLETED
-        action.completed_at = datetime.utcnow()
+        action.completed_at = datetime.now(timezone.utc)
         action.result_narrative = narrative_result.get("narrative", "")
         action.result_effects = narrative_result.get("effects", {})
 
@@ -262,7 +262,7 @@ class ActionService:
         target_char = await self.game_service.get_character(target_action.character_id)
 
         # Calculate elapsed time
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         elapsed = (now - target_action.started_at).total_seconds()
         remaining = (target_action.finish_at - now).total_seconds()
 
@@ -339,7 +339,7 @@ class ActionService:
         target_char = await self.game_service.get_character(target_action.character_id)
 
         # Calculate time reduction
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         remaining = (target_action.finish_at - now).total_seconds()
 
         if remaining > 0:
@@ -420,10 +420,11 @@ class ActionService:
         return action
 
     def action_to_response(self, action: Action) -> ActionResponse:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         remaining = None
         if action.status == ActionStatus.PENDING and action.finish_at:
-            remaining = max(0, (action.finish_at - now).total_seconds())
+            finish_at = action.finish_at.replace(tzinfo=timezone.utc) if action.finish_at.tzinfo is None else action.finish_at
+            remaining = max(0, (finish_at - now).total_seconds())
 
         return ActionResponse(
             id=action.id,

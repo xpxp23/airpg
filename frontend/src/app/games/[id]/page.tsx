@@ -28,9 +28,11 @@ export default function GameRoomPage() {
     submitAction,
     submitCooperation,
     cancelAction,
-  } = useGameState(gameId);
+  } = useGameState(gameId, user?.id);
 
   const [showCharacters, setShowCharacters] = useState(false);
+  const [joining, setJoining] = useState(false);
+  const [starting, setStarting] = useState(false);
   const eventsEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -44,20 +46,45 @@ export default function GameRoomPage() {
   }, [events]);
 
   const handleJoin = async (characterId?: string) => {
+    setJoining(true);
     try {
       await api.joinGame(gameId, characterId);
+      refresh();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setJoining(false);
+    }
+  };
+
+  const handleLeave = async () => {
+    try {
+      await api.leaveGame(gameId);
       refresh();
     } catch (err: any) {
       alert(err.message);
     }
   };
 
+  const handleDisband = async () => {
+    if (!confirm("确定要解散房间吗？此操作不可撤销。")) return;
+    try {
+      await api.disbandGame(gameId);
+      router.push("/games");
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
   const handleStart = async () => {
+    setStarting(true);
     try {
       await api.startGame(gameId);
       refresh();
     } catch (err: any) {
       alert(err.message);
+    } finally {
+      setStarting(false);
     }
   };
 
@@ -211,8 +238,8 @@ export default function GameRoomPage() {
                 return (
                   <button
                     key={pc.id}
-                    onClick={() => !taken && handleJoin(pc.id)}
-                    disabled={!!taken || hasCharacter}
+                    onClick={() => !taken && !joining && handleJoin(pc.id)}
+                    disabled={!!taken || hasCharacter || joining}
                     className={`p-4 rounded-xl border text-left transition-all ${
                       taken
                         ? "border-fantasy-muted/20 opacity-50 cursor-not-allowed"
@@ -239,27 +266,48 @@ export default function GameRoomPage() {
               <h3 className="text-md font-semibold text-fantasy-text mb-2">或自创角色</h3>
               <button
                 onClick={() => handleJoin()}
-                className="bg-fantasy-card hover:bg-fantasy-card/80 border border-fantasy-accent/20 text-fantasy-text px-6 py-3 rounded-lg transition-colors"
+                disabled={joining}
+                className="bg-fantasy-card hover:bg-fantasy-card/80 disabled:opacity-50 border border-fantasy-accent/20 text-fantasy-text px-6 py-3 rounded-lg transition-colors"
               >
-                创建自定义角色
+                {joining ? "加入中..." : "创建自定义角色"}
               </button>
             </div>
           )}
 
           {hasCharacter && (
-            <div className="bg-green-500/10 border border-green-500/30 text-green-400 px-4 py-3 rounded-lg mb-6">
-              你已加入游戏，等待其他玩家...
+            <div className="bg-green-500/10 border border-green-500/30 text-green-400 px-4 py-3 rounded-lg mb-6 flex items-center justify-between">
+              <span>你已加入游戏，等待其他玩家...</span>
+              {!isCreator && (
+                <button
+                  onClick={handleLeave}
+                  className="text-sm text-red-400 hover:text-red-300 ml-4"
+                >
+                  退出房间
+                </button>
+              )}
             </div>
           )}
 
+          <div className="flex items-center justify-between text-sm text-fantasy-muted mb-4">
+            <span>当前 {characters.length} / {game.max_players} 名玩家</span>
+          </div>
+
           {isCreator && (
-            <button
-              onClick={handleStart}
-              disabled={!game.ai_summary}
-              className="w-full bg-fantasy-accent hover:bg-fantasy-accent/80 disabled:bg-fantasy-accent/50 disabled:cursor-not-allowed text-white py-4 rounded-lg text-lg font-semibold transition-colors shadow-lg shadow-fantasy-accent/25"
-            >
-              {game.ai_summary ? "开始游戏" : "等待 AI 解析完成..."}
-            </button>
+            <div className="space-y-3">
+              <button
+                onClick={handleStart}
+                disabled={!game.ai_summary || characters.length === 0 || starting}
+                className="w-full bg-fantasy-accent hover:bg-fantasy-accent/80 disabled:bg-fantasy-accent/50 disabled:cursor-not-allowed text-white py-4 rounded-lg text-lg font-semibold transition-colors shadow-lg shadow-fantasy-accent/25"
+              >
+                {starting ? "启动中..." : !game.ai_summary ? "等待 AI 解析完成..." : characters.length === 0 ? "等待玩家加入..." : "开始游戏"}
+              </button>
+              <button
+                onClick={handleDisband}
+                className="w-full bg-transparent border border-red-500/30 hover:bg-red-500/10 text-red-400 py-2 rounded-lg text-sm transition-colors"
+              >
+                解散房间
+              </button>
+            </div>
           )}
         </div>
       </div>

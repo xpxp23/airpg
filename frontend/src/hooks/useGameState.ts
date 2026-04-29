@@ -13,7 +13,7 @@ interface GameState {
   pendingAction: GameAction | null;
 }
 
-export function useGameState(gameId: string) {
+export function useGameState(gameId: string, userId?: string) {
   const [state, setState] = useState<GameState>({
     game: null,
     characters: [],
@@ -47,8 +47,8 @@ export function useGameState(gameId: string) {
         lastEventTime.current = newest.timestamp;
       }
 
-      // Find current user's character (simplified - assumes first character)
-      const myChar = characters.find((c) => c.player_id) || null;
+      // Find current user's character
+      const myChar = userId ? characters.find((c) => c.player_id === userId) || null : null;
       const pending = actions.find(
         (a) => a.status === "pending" && a.character_id === myChar?.id
       ) || null;
@@ -78,25 +78,25 @@ export function useGameState(gameId: string) {
     } finally {
       setLoading(false);
     }
-  }, [gameId]);
+  }, [gameId, userId]);
 
   // Initial load
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  // Polling - faster when waiting for AI summary in lobby
+  // Polling - adaptive interval based on game state
   useEffect(() => {
     const getInterval = () => {
-      if (state.game?.status === "lobby" && !state.game?.ai_summary) return 3000; // 3s while AI parsing
-      return 30000; // 30s normal
+      if (state.game?.status === "lobby") return 5000;  // 5s in lobby for real-time feel
+      return 10000; // 10s in active game
     };
 
     pollInterval.current = setInterval(refresh, getInterval());
     return () => {
       if (pollInterval.current) clearInterval(pollInterval.current);
     };
-  }, [refresh, state.game?.status, state.game?.ai_summary]);
+  }, [refresh, state.game?.status]);
 
   const submitAction = useCallback(
     async (actionText: string) => {

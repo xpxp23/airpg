@@ -105,6 +105,18 @@ class ApiClient {
     });
   }
 
+  async leaveGame(gameId: string): Promise<void> {
+    return this.request(`/games/${gameId}/leave`, {
+      method: "POST",
+    });
+  }
+
+  async disbandGame(gameId: string): Promise<void> {
+    return this.request(`/games/${gameId}/disband`, {
+      method: "POST",
+    });
+  }
+
   async getEvents(gameId: string, since?: string): Promise<{ events: GameEvent[]; has_more: boolean }> {
     const params = since ? `?since=${since}` : "";
     return this.request(`/games/${gameId}/events${params}`);

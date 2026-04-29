@@ -23,6 +23,8 @@ export default function GamesPage() {
   useEffect(() => {
     if (user) {
       loadGames();
+      const interval = setInterval(loadGames, 10000); // Refresh every 10s
+      return () => clearInterval(interval);
     }
   }, [user, scope]);
 

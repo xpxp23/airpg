@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, DateTime, Boolean, Text, ForeignKey, func
+from sqlalchemy import String, DateTime, Boolean, Text, ForeignKey, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import JSONB
 from app.database import Base
@@ -8,6 +8,9 @@ from app.database import Base
 
 class Character(Base):
     __tablename__ = "characters"
+    __table_args__ = (
+        UniqueConstraint("game_id", "player_id", name="uq_character_game_player"),
+    )
 
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
@@ -16,7 +19,7 @@ class Character(Base):
         String(36), ForeignKey("games.id", ondelete="CASCADE"), nullable=False
     )
     player_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=True
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)

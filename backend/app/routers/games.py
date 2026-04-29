@@ -66,10 +66,10 @@ async def list_games(
 ):
     game_service = GameService(db)
     if scope == "mine":
-        games = await game_service.list_user_games(current_user.id)
+        games_with_counts = await game_service.list_user_games(current_user.id)
     else:
-        games = await game_service.list_public_games(limit, offset)
-    return [_game_to_response(g) for g in games]
+        games_with_counts = await game_service.list_public_games(limit, offset)
+    return [_game_to_response(g, player_count=cnt) for g, cnt in games_with_counts]
 
 
 @router.get("/{game_id}", response_model=GameDetailResponse)
@@ -82,6 +82,16 @@ async def get_game(
     game = await game_service.get_game(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
+
+    # Auth check: private games only accessible by creator or participants
+    if not game.is_public:
+        is_creator = game.creator_id == current_user.id
+        if not is_creator:
+            character = await game_service.get_player_character(game_id, current_user.id)
+            if not character:
+                raise HTTPException(status_code=403, detail="This game is private")
+
+    player_count = await game_service.get_player_count(game_id)
 
     return GameDetailResponse(
         id=game.id,
@@ -99,6 +109,7 @@ async def get_game(
         ai_summary=game.ai_summary,
         duration_hint=game.duration_hint,
         target_duration_minutes=game.target_duration_minutes,
+        player_count=player_count,
     )
 
 
@@ -138,6 +149,32 @@ async def start_game(
     try:
         game = await game_service.start_game(game_id, current_user.id)
         return _game_to_response(game)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{game_id}/leave", status_code=status.HTTP_204_NO_CONTENT)
+async def leave_game(
+    game_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    game_service = GameService(db)
+    try:
+        await game_service.leave_game(game_id, current_user.id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{game_id}/disband", status_code=status.HTTP_204_NO_CONTENT)
+async def disband_game(
+    game_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    game_service = GameService(db)
+    try:
+        await game_service.disband_game(game_id, current_user.id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

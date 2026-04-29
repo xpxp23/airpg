@@ -2,7 +2,7 @@ import uuid
 import string
 import random
 from datetime import datetime, timedelta
-from sqlalchemy import select, func
+from sqlalchemy import select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from app.models import Game, GameStatus, Character, User, Event, EventType
@@ -82,20 +82,35 @@ class GameService:
         )
         return result.scalar_one_or_none()
 
-    async def list_public_games(self, limit: int = 20, offset: int = 0) -> list[Game]:
+    async def list_public_games(self, limit: int = 20, offset: int = 0) -> list[tuple[Game, int]]:
+        """Return (game, player_count) tuples."""
+        count_subq = (
+            select(Character.game_id, func.count(Character.id).label("cnt"))
+            .where(Character.player_id.isnot(None))
+            .group_by(Character.game_id)
+            .subquery()
+        )
         result = await self.db.execute(
-            select(Game)
-            .where(Game.is_public == True, Game.status.in_(["lobby", "active"]))
+            select(Game, func.coalesce(count_subq.c.cnt, 0).label("player_count"))
+            .outerjoin(count_subq, Game.id == count_subq.c.game_id)
+            .where(Game.is_public == True, Game.status.in_([GameStatus.LOBBY, GameStatus.ACTIVE]))
             .order_by(Game.created_at.desc())
             .limit(limit)
             .offset(offset)
         )
-        return list(result.scalars().all())
+        return [(row[0], row[1]) for row in result.all()]
 
-    async def list_user_games(self, user_id: str) -> list[Game]:
-        # Games where user is creator or has a character
+    async def list_user_games(self, user_id: str) -> list[tuple[Game, int]]:
+        """Return (game, player_count) tuples for games the user is involved in."""
+        count_subq = (
+            select(Character.game_id, func.count(Character.id).label("cnt"))
+            .where(Character.player_id.isnot(None))
+            .group_by(Character.game_id)
+            .subquery()
+        )
         result = await self.db.execute(
-            select(Game)
+            select(Game, func.coalesce(count_subq.c.cnt, 0).label("player_count"))
+            .outerjoin(count_subq, Game.id == count_subq.c.game_id)
             .join(Character, Character.game_id == Game.id, isouter=True)
             .where(
                 (Game.creator_id == user_id) | (Character.player_id == user_id)
@@ -103,10 +118,21 @@ class GameService:
             .distinct()
             .order_by(Game.created_at.desc())
         )
-        return list(result.scalars().all())
+        return [(row[0], row[1]) for row in result.all()]
+
+    async def get_player_count(self, game_id: str) -> int:
+        result = await self.db.execute(
+            select(func.count(Character.id))
+            .where(Character.game_id == game_id, Character.player_id.isnot(None))
+        )
+        return result.scalar() or 0
 
     async def join_game(self, game_id: str, user_id: str, character_id: str | None = None) -> Character:
-        game = await self.get_game(game_id)
+        # Lock the game row to prevent TOCTOU race conditions
+        result = await self.db.execute(
+            select(Game).where(Game.id == game_id).with_for_update()
+        )
+        game = result.scalar_one_or_none()
         if not game:
             raise ValueError("Game not found")
         if game.status != GameStatus.LOBBY:
@@ -131,10 +157,11 @@ class GameService:
             raise ValueError("Already in this game")
 
         if character_id:
-            # Select existing character
+            # Select existing character with lock
             result = await self.db.execute(
                 select(Character)
                 .where(Character.id == character_id, Character.game_id == game_id)
+                .with_for_update()
             )
             character = result.scalar_one_or_none()
             if not character:
@@ -179,10 +206,8 @@ class GameService:
             raise ValueError("Only creator can start the game")
         if game.status != GameStatus.LOBBY:
             raise ValueError("Game is not in lobby state")
-
-        # Parse story if not done
         if not game.ai_summary:
-            await self.parse_story(game_id)
+            raise ValueError("AI is still parsing the story, please wait")
 
         game.status = GameStatus.ACTIVE
         game.started_at = datetime.utcnow()
@@ -202,6 +227,59 @@ class GameService:
         await self.db.commit()
         await self.db.refresh(game)
         return game
+
+    async def leave_game(self, game_id: str, user_id: str) -> None:
+        game = await self.get_game(game_id)
+        if not game:
+            raise ValueError("Game not found")
+        if game.status != GameStatus.LOBBY:
+            raise ValueError("Cannot leave a game that has started")
+        if game.creator_id == user_id:
+            raise ValueError("Creator cannot leave; use disband instead")
+
+        result = await self.db.execute(
+            select(Character)
+            .where(Character.game_id == game_id, Character.player_id == user_id)
+        )
+        character = result.scalar_one_or_none()
+        if not character:
+            raise ValueError("You are not in this game")
+
+        # Release the character (make it available again or remove custom ones)
+        character.player_id = None
+
+        # Add leave event
+        event = Event(
+            id=str(uuid.uuid4()),
+            game_id=game_id,
+            type=EventType.PLAYER_LEAVE,
+            data={
+                "user_id": user_id,
+                "character_name": character.name,
+            },
+        )
+        self.db.add(event)
+        await self.db.commit()
+
+    async def disband_game(self, game_id: str, user_id: str) -> None:
+        game = await self.get_game(game_id)
+        if not game:
+            raise ValueError("Game not found")
+        if game.creator_id != user_id:
+            raise ValueError("Only the creator can disband the game")
+        if game.status != GameStatus.LOBBY:
+            raise ValueError("Cannot disband a game that has started")
+
+        game.status = GameStatus.ABANDONED
+
+        event = Event(
+            id=str(uuid.uuid4()),
+            game_id=game_id,
+            type=EventType.GAME_END,
+            data={"reason": "房主解散了房间"},
+        )
+        self.db.add(event)
+        await self.db.commit()
 
     async def get_player_character(self, game_id: str, user_id: str) -> Character | None:
         result = await self.db.execute(

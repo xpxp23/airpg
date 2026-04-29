@@ -1,5 +1,6 @@
 import json
 import re
+import httpx
 from openai import AsyncOpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
 from app.config import get_settings
@@ -31,7 +32,11 @@ class AIService:
             # OpenAI Compatible (covers OpenAI, proxies, local models, etc.)
             api_key = settings.AI_API_KEY or settings.OPENAI_API_KEY or "sk-placeholder"
             base_url = settings.AI_BASE_URL
-            self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+            self.client = AsyncOpenAI(
+                api_key=api_key,
+                base_url=base_url,
+                timeout=httpx.Timeout(120.0, connect=10.0),
+            )
             self.is_anthropic = False
 
     def _get_model(self, model: str | None, premium: bool = False) -> str:
@@ -42,7 +47,7 @@ class AIService:
             return settings.AI_MODEL_PREMIUM or settings.OPENAI_MODEL_GPT4O
         return settings.AI_MODEL_DEFAULT or settings.OPENAI_MODEL_MINI
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+    @retry(stop=stop_after_attempt(2), wait=wait_exponential(multiplier=1, min=2, max=10))
     async def call_json(
         self,
         system_prompt: str,
@@ -64,7 +69,7 @@ class AIService:
                 return json.loads(match.group())
             raise ValueError(f"AI returned invalid JSON: {content[:200]}")
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+    @retry(stop=stop_after_attempt(2), wait=wait_exponential(multiplier=1, min=2, max=10))
     async def call_text(
         self,
         system_prompt: str,

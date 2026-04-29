@@ -85,13 +85,18 @@ export function useGameState(gameId: string) {
     refresh();
   }, [refresh]);
 
-  // Polling
+  // Polling - faster when waiting for AI summary in lobby
   useEffect(() => {
-    pollInterval.current = setInterval(refresh, 30000); // 30 seconds
+    const getInterval = () => {
+      if (state.game?.status === "lobby" && !state.game?.ai_summary) return 3000; // 3s while AI parsing
+      return 30000; // 30s normal
+    };
+
+    pollInterval.current = setInterval(refresh, getInterval());
     return () => {
       if (pollInterval.current) clearInterval(pollInterval.current);
     };
-  }, [refresh]);
+  }, [refresh, state.game?.status, state.game?.ai_summary]);
 
   const submitAction = useCallback(
     async (actionText: string) => {

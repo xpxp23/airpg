@@ -172,6 +172,13 @@ export default function GameRoomPage() {
           <h1 className="text-3xl font-bold mb-2 text-fantasy-text">
             {game.title || "准备中..."}
           </h1>
+
+          {!game.ai_summary && (
+            <div className="bg-fantasy-accent/10 border border-fantasy-accent/20 rounded-lg px-4 py-3 mb-4 flex items-center space-x-3">
+              <div className="animate-spin w-5 h-5 border-2 border-fantasy-accent border-t-transparent rounded-full" />
+              <span className="text-fantasy-accent text-sm">AI 正在解析故事文本，请稍候...</span>
+            </div>
+          )}
           <p className="text-fantasy-muted mb-6">
             邀请码：<span className="text-fantasy-accent font-mono">{game.invite_code}</span>
           </p>
@@ -195,6 +202,9 @@ export default function GameRoomPage() {
             <h2 className="text-lg font-semibold text-fantasy-text mb-4">
               选择角色 ({characters.length}/{game.max_players})
             </h2>
+            {!game.ai_summary ? (
+              <p className="text-fantasy-muted text-sm">等待 AI 解析完成后可选择角色...</p>
+            ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {presetChars.map((pc) => {
                 const taken = characters.find((c) => c.name === pc.name);
@@ -221,6 +231,7 @@ export default function GameRoomPage() {
                 );
               })}
             </div>
+            )}
           </div>
 
           {!hasCharacter && (
@@ -244,9 +255,10 @@ export default function GameRoomPage() {
           {isCreator && (
             <button
               onClick={handleStart}
-              className="w-full bg-fantasy-accent hover:bg-fantasy-accent/80 text-white py-4 rounded-lg text-lg font-semibold transition-colors shadow-lg shadow-fantasy-accent/25"
+              disabled={!game.ai_summary}
+              className="w-full bg-fantasy-accent hover:bg-fantasy-accent/80 disabled:bg-fantasy-accent/50 disabled:cursor-not-allowed text-white py-4 rounded-lg text-lg font-semibold transition-colors shadow-lg shadow-fantasy-accent/25"
             >
-              开始游戏
+              {game.ai_summary ? "开始游戏" : "等待 AI 解析完成..."}
             </button>
           )}
         </div>

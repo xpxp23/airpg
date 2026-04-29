@@ -1,13 +1,17 @@
+import asyncio
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
-from app.database import get_db
+from app.database import get_db, async_session
 from app.schemas.game import GameCreate, GameJoin, GameResponse, GameDetailResponse, GameStart
 from app.schemas.character import CharacterResponse
 from app.schemas.event import EventResponse, EventListResponse
 from app.services.game_service import GameService
 from app.dependencies import get_current_user
 from app.models.user import User
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/games", tags=["games"])
 
@@ -29,6 +33,16 @@ def _game_to_response(game, player_count: int = 0) -> GameResponse:
     )
 
 
+async def _parse_story_background(game_id: str):
+    """Run story parsing in background, independent of the HTTP request."""
+    async with async_session() as db:
+        try:
+            game_service = GameService(db)
+            await game_service.parse_story(game_id)
+        except Exception:
+            logger.exception("Background story parsing failed for game %s", game_id)
+
+
 @router.post("", response_model=GameResponse, status_code=status.HTTP_201_CREATED)
 async def create_game(
     data: GameCreate,
@@ -37,11 +51,8 @@ async def create_game(
 ):
     game_service = GameService(db)
     game = await game_service.create_game(current_user.id, data)
-    # Parse story in background
-    try:
-        await game_service.parse_story(game.id)
-    except Exception:
-        pass  # Story parsing can fail, game still created
+    # Fire-and-forget: parse story in background, return immediately
+    asyncio.create_task(_parse_story_background(game.id))
     return _game_to_response(game)
 
 

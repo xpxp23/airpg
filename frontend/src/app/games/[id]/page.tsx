@@ -1,0 +1,344 @@
+"use client";
+
+import { useState, useEffect, useRef } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/useAuth";
+import { useGameState } from "@/hooks/useGameState";
+import { api } from "@/lib/api";
+import { GameAction, GameEvent } from "@/types";
+import { CharacterPanel } from "@/components/CharacterPanel";
+import { ActionInput } from "@/components/ActionInput";
+import { CooperationPanel } from "@/components/CooperationPanel";
+
+export default function GameRoomPage() {
+  const params = useParams();
+  const gameId = params.id as string;
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
+  const {
+    game,
+    characters,
+    actions,
+    events,
+    myCharacter,
+    pendingAction,
+    loading,
+    error,
+    refresh,
+    submitAction,
+    submitCooperation,
+    cancelAction,
+  } = useGameState(gameId);
+
+  const [showCharacters, setShowCharacters] = useState(false);
+  const eventsEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push("/login");
+    }
+  }, [user, authLoading, router]);
+
+  useEffect(() => {
+    eventsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [events]);
+
+  const handleJoin = async (characterId?: string) => {
+    try {
+      await api.joinGame(gameId, characterId);
+      refresh();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleStart = async () => {
+    try {
+      await api.startGame(gameId);
+      refresh();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const getEventDisplay = (event: GameEvent) => {
+    const { type, data } = event;
+    switch (type) {
+      case "game_start":
+        return {
+          content: data.narrative || "游戏开始了！",
+          isSystem: true,
+          icon: " ",
+        };
+      case "game_end":
+        return {
+          content: `故事落幕。${data.reason || ""}`,
+          isSystem: true,
+          icon: " ",
+        };
+      case "player_join":
+        return {
+          content: `${data.character_name} 加入了冒险队伍`,
+          isSystem: true,
+          icon: " ",
+        };
+      case "action_start":
+        return {
+          content: data.public_snippet || `${data.character_name} 开始行动`,
+          isSystem: false,
+          icon: "⏳",
+          characterName: data.character_name,
+        };
+      case "action_result":
+        return {
+          content: data.narrative || `${data.character_name} 完成了行动`,
+          isSystem: false,
+          icon: " ",
+          characterName: data.character_name,
+          isNarrative: true,
+        };
+      case "cooperation_start":
+        return {
+          content: data.public_snippet || `${data.helper_name} 正在协助 ${data.target_name}`,
+          isSystem: false,
+          icon: " ",
+          characterName: data.helper_name,
+        };
+      case "cooperation_result":
+        return {
+          content: data.narrative || `${data.helper_name} 完成了协助`,
+          isSystem: false,
+          icon: " ",
+          characterName: data.helper_name,
+        };
+      case "chapter_advance":
+        return {
+          content: `故事进入第 ${data.chapter} 章${data.description ? `：${data.description}` : ""}`,
+          isSystem: true,
+          icon: " ",
+        };
+      case "system_message":
+        return {
+          content: data.message || "",
+          isSystem: true,
+          icon: " ",
+        };
+      default:
+        return {
+          content: JSON.stringify(data),
+          isSystem: true,
+          icon: " ",
+        };
+    }
+  };
+
+  const sortedEvents = [...events].sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
+
+  if (authLoading || !user) {
+    return (
+      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
+        <div className="text-fantasy-muted">加载中...</div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
+        <div className="text-fantasy-muted">加载游戏中...</div>
+      </div>
+    );
+  }
+
+  if (error || !game) {
+    return (
+      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
+        <div className="text-red-400">{error || "游戏不存在"}</div>
+      </div>
+    );
+  }
+
+  // Lobby state
+  if (game.status === "lobby") {
+    const presetChars = game.ai_summary?.preset_characters || [];
+    const isCreator = game.creator_id === user.id;
+    const hasCharacter = characters.some((c) => c.player_id === user.id);
+
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <div className="bg-fantasy-card/60 backdrop-blur-sm rounded-2xl p-8 border border-fantasy-accent/10">
+          <h1 className="text-3xl font-bold mb-2 text-fantasy-text">
+            {game.title || "准备中..."}
+          </h1>
+          <p className="text-fantasy-muted mb-6">
+            邀请码：<span className="text-fantasy-accent font-mono">{game.invite_code}</span>
+          </p>
+
+          {game.ai_summary && (
+            <div className="bg-fantasy-bg/30 rounded-xl p-6 mb-6">
+              <h2 className="text-lg font-semibold text-fantasy-text mb-2">  故事简介</h2>
+              <p className="text-fantasy-muted text-sm mb-2">
+                <strong>类型：</strong>{game.ai_summary.genre} | <strong>基调：</strong>{game.ai_summary.tone}
+              </p>
+              <p className="text-fantasy-muted text-sm mb-4">
+                <strong>目标：</strong>{game.ai_summary.main_goal}
+              </p>
+              <p className="text-fantasy-text leading-relaxed">
+                {game.ai_summary.initial_state?.narrative?.substring(0, 300)}...
+              </p>
+            </div>
+          )}
+
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold text-fantasy-text mb-4">
+              选择角色 ({characters.length}/{game.max_players})
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {presetChars.map((pc) => {
+                const taken = characters.find((c) => c.name === pc.name);
+                return (
+                  <button
+                    key={pc.id}
+                    onClick={() => !taken && handleJoin(pc.id)}
+                    disabled={!!taken || hasCharacter}
+                    className={`p-4 rounded-xl border text-left transition-all ${
+                      taken
+                        ? "border-fantasy-muted/20 opacity-50 cursor-not-allowed"
+                        : "border-fantasy-accent/20 hover:border-fantasy-accent/50 cursor-pointer"
+                    }`}
+                  >
+                    <div className="font-semibold text-fantasy-text">
+                      {pc.name}
+                      {taken && <span className="text-fantasy-muted text-sm ml-2">已被选择</span>}
+                    </div>
+                    <div className="text-sm text-fantasy-muted mt-1">{pc.description}</div>
+                    <div className="text-xs text-fantasy-muted/60 mt-2">
+                      技能：{pc.skills?.join("、") || "无特殊技能"}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {!hasCharacter && (
+            <div className="mb-6">
+              <h3 className="text-md font-semibold text-fantasy-text mb-2">或自创角色</h3>
+              <button
+                onClick={() => handleJoin()}
+                className="bg-fantasy-card hover:bg-fantasy-card/80 border border-fantasy-accent/20 text-fantasy-text px-6 py-3 rounded-lg transition-colors"
+              >
+                创建自定义角色
+              </button>
+            </div>
+          )}
+
+          {hasCharacter && (
+            <div className="bg-green-500/10 border border-green-500/30 text-green-400 px-4 py-3 rounded-lg mb-6">
+              你已加入游戏，等待其他玩家...
+            </div>
+          )}
+
+          {isCreator && (
+            <button
+              onClick={handleStart}
+              className="w-full bg-fantasy-accent hover:bg-fantasy-accent/80 text-white py-4 rounded-lg text-lg font-semibold transition-colors shadow-lg shadow-fantasy-accent/25"
+            >
+              开始游戏
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Active game state
+  return (
+    <div className="flex h-[calc(100vh-4rem)]">
+      {/* Main chat area */}
+      <div className="flex-1 flex flex-col">
+        {/* Game header */}
+        <div className="bg-fantasy-card/60 backdrop-blur-sm border-b border-fantasy-accent/10 px-4 py-3 flex items-center justify-between">
+          <div>
+            <h1 className="text-lg font-semibold text-fantasy-text">
+              {game.title || "游戏进行中"}
+            </h1>
+            <div className="text-sm text-fantasy-muted">
+              第 {game.current_chapter} 章 | {characters.filter((c) => c.is_alive).length} 名冒险者存活
+            </div>
+          </div>
+          <button
+            onClick={() => setShowCharacters(!showCharacters)}
+            className="bg-fantasy-card hover:bg-fantasy-card/80 text-fantasy-text px-4 py-2 rounded-lg text-sm transition-colors"
+          >
+             角色面板
+          </button>
+        </div>
+
+        {/* Events stream */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {sortedEvents.map((event) => {
+            const display = getEventDisplay(event);
+            return (
+              <div
+                key={event.id}
+                className={`message-enter ${
+                  display.isSystem
+                    ? "text-center"
+                    : display.isNarrative
+                    ? "bg-fantasy-card/40 rounded-xl p-4 border border-fantasy-accent/10"
+                    : ""
+                }`}
+              >
+                {display.isSystem ? (
+                  <div className="text-fantasy-muted text-sm">
+                    <span className="mr-2">{display.icon}</span>
+                    {display.content}
+                  </div>
+                ) : (
+                  <div>
+                    <div className="flex items-center space-x-2 mb-1">
+                      <span>{display.icon}</span>
+                      <span className="font-semibold text-fantasy-accent text-sm">
+                        {display.characterName}
+                      </span>
+                      <span className="text-fantasy-muted/60 text-xs">
+                        {new Date(event.timestamp).toLocaleTimeString("zh-CN")}
+                      </span>
+                    </div>
+                    <p className={`text-fantasy-text ${display.isNarrative ? "leading-relaxed" : "text-sm"}`}>
+                      {display.content}
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          <div ref={eventsEndRef} />
+        </div>
+
+        {/* Action input */}
+        <ActionInput
+          pendingAction={pendingAction}
+          onSubmit={submitAction}
+          onCancel={cancelAction}
+        />
+      </div>
+
+      {/* Character panel sidebar */}
+      {showCharacters && (
+        <CharacterPanel
+          characters={characters}
+          actions={actions}
+          myCharacter={myCharacter}
+          onClose={() => setShowCharacters(false)}
+          onCooperation={(targetActionId, text) =>
+            submitCooperation(targetActionId, text)
+          }
+        />
+      )}
+    </div>
+  );
+}

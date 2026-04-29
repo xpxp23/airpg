@@ -1,0 +1,3279 @@
+# AI 异步叙事跑团游戏 · 完整开发手册
+
+**代号：Neverwinter Nights Async**
+
+> **文档版本**：v2.0 | **最后更新**：2026-04-29
+> **适用阶段**：从零到一的 MVP 开发及后续迭代
+
+---
+
+## 目录
+
+1. [项目概述](#1-项目概述)
+2. [核心用户流程](#2-核心用户流程)
+3. [系统架构](#3-系统架构)
+4. [技术选型](#4-技术选型)
+5. [数据库设计](#5-数据库设计)
+6. [后端服务设计](#6-后端服务设计)
+7. [AI 集成方案](#7-ai-集成方案prompt-engineering-核心)
+8. [前端设计要点](#8-前端设计要点)
+9. [推送通知策略](#9-推送通知策略)
+10. [游戏逻辑实现细节](#10-游戏逻辑实现细节)
+11. [安全与内容治理](#11-安全与内容治理)
+12. [测试策略](#12-测试策略)
+13. [成本优化](#13-成本优化)
+14. [部署与运维](#14-部署与运维)
+15. [可扩展性设计](#15-可扩展性设计)
+16. [MVP 路线图](#16-mvp-路线图)
+
+---
+
+## 1. 项目概述
+
+### 1.1 产品定位
+
+一款完全**异步、低沉浸、碎片化时间**的多人合作叙事游戏。核心体验：
+
+- 像《生命线》一样等通知做决策
+- 像桌面跑团（TTRPG）一样自由输入行动
+- 像协作解谜一样互相救援、影响彼此进程
+
+**目标用户**：
+- 跑团爱好者（TRPG/DND 玩家）——寻找异步替代方案
+- 网文/小说读者——将喜爱的故事变成可互动的游戏
+- 轻度社交游戏玩家——喜欢碎片化合作体验
+
+### 1.2 核心差异化
+
+| 特性 | 传统文字冒险 | 本项目 |
+|------|------------|--------|
+| 剧本来源 | 预设固定脚本 | **玩家上传任意文本，AI 实时解析** |
+| 时间模式 | 同步/回合制 | **完全异步，推送通知驱动** |
+| 玩家互动 | 无或极弱 | **救援机制可改变他人等待时间** |
+| 游戏时长 | 固定 | **创建者可自定义（8h~7d），AI 控制节奏** |
+| 重玩价值 | 低（固定剧情） | **高（不同行动 → 不同分支叙事）** |
+
+### 1.3 成功指标（MVP 阶段）
+
+| 指标 | 目标值 | 说明 |
+|------|--------|------|
+| DAU | 500+ | MVP 期小规模验证 |
+| 平均游戏时长 | > 2 小时/局 | 异步特性下跨多天 |
+| 玩家留存（D1/D7） | 40% / 15% | 推送召回驱动 |
+| 每局平均行动数 | > 15 次/人 | 反映叙事深度 |
+| AI 调用成本/局 | < $0.50 | 可持续运营 |
+
+---
+
+## 2. 核心用户流程
+
+### 2.1 创建游戏
+
+```
+创建者 → 输入故事文本 → 设置时长 → 选择公开/私密 → AI 解析 → 调整角色 → 分享房间
+```
+
+1. 玩家 A 点击"创建新游戏"
+2. 输入/粘贴故事文本（小说片段、原创剧情、世界观描述、剧本大纲均可）
+3. 设置游戏期望总时长（自由输入，如"8 小时"、"2 天"，AI 理解自然语言）
+4. 设置公共或私密房间（生成邀请码 / 深度链接）
+5. AI 解析文本，生成：
+   - 初始场景描述
+   - 预设可选角色（从故事中提取，或允许玩家架空创建）
+   - 故事主线任务与目标
+   - 章节节奏计划（按时间比例划分叙事进度）
+6. 创建者可以手动调整角色名/描述，之后确认并分享房间
+
+### 2.2 加入游戏
+
+```
+收到邀请 → 浏览房间 → 选择/自创角色 → 等待全员就位 → AI 开场叙事
+```
+
+1. 玩家通过深度链接 / 邀请码进入房间
+2. 查看当前已选择的角色和空闲角色
+3. 选择预设角色，或输入自定义描述由 AI 生成个性化角色
+4. 所有玩家就位后，AI 发送开场叙事，游戏正式开始
+
+### 2.3 游戏进行中
+
+```
+玩家输入行动 → AI 评估等待时间 → 公开信息广播 → 等待（可被救援缩短）
+→ 行动完成 → AI 生成叙事结果 → 推送通知 → 写入时间线
+```
+
+1. 每个玩家在任何时候可以输入行动（无在线压力）
+2. AI 立即返回**公开信息**："XX 正在做某事（预计等待 X 分钟）"——所有玩家可见
+3. 行动完成后，AI 推送完整叙事结果到所有玩家，事件写入公共时间线
+4. 玩家可以发起"救援行动"帮助其他正在等待的玩家，成功后缩短对方剩余等待时间
+5. 当 AI 判断故事抵达结局或达到设定时长上限时，推动剧情进入尾声
+
+### 2.4 游戏结束
+
+- 时长耗尽或团队达成目标 → AI 生成结局叙事
+- 展示故事总结：所有事件可回看、每位玩家的行动统计、最佳时刻回顾
+- 创建者可选择"导出故事"（生成完整的小说化叙述）
+
+---
+
+## 3. 系统架构
+
+### 3.1 整体架构图
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Client Layer                                │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐  │
+│  │  iOS App     │  │ Android App  │  │  Web App (Phase 2)       │  │
+│  │  (Flutter)   │  │ (Flutter)    │  │  (React/Next.js)         │  │
+│  └──────┬───────┘  └──────┬───────┘  └────────────┬─────────────┘  │
+└─────────┼─────────────────┼───────────────────────┼────────────────┘
+          │                 │                       │
+          ▼                 ▼                       ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                       API Gateway (Nginx / Cloudflare)              │
+│              Rate Limiting · SSL Termination · CORS                 │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │
+          ┌────────────────────┼────────────────────┐
+          ▼                    ▼                    ▼
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│   Auth Service   │  │  Game Service   │  │   AI Service    │
+│   (FastAPI)      │  │  (FastAPI)      │  │   (FastAPI)     │
+│                  │  │                 │  │                 │
+│ · JWT 签发/验证  │  │ · 房间管理      │  │ · 故事解析      │
+│ · OAuth2 集成    │  │ · 行动生命周期  │  │ · 行动评估      │
+│ · 会话管理       │  │ · 救援逻辑      │  │ · 叙事生成      │
+│                  │  │ · 游戏状态机    │  │ · 记忆管理      │
+└────────┬────────┘  └────────┬────────┘  └────────┬────────┘
+         │                    │                    │
+         ▼                    ▼                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Data Layer                                   │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐  │
+│  │  PostgreSQL   │  │    Redis     │  │   BullMQ Workers        │  │
+│  │              │  │              │  │                          │  │
+│  │ · 用户数据   │  │ · 会话缓存   │  │ · 延迟任务（行动完成）  │  │
+│  │ · 游戏状态   │  │ · 在线状态   │  │ · 定时检查（游戏结束）  │  │
+│  │ · 事件流     │  │ · 倒计时     │  │ · 推送通知调度          │  │
+│  │ · AI 摘要    │  │ · 限流计数   │  │ · 摘要生成              │  │
+│  └──────────────┘  └──────────────┘  └──────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                      External Services                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐  │
+│  │  LLM API     │  │ Firebase FCM │  │   Sentry / Grafana      │  │
+│  │ (OpenAI /    │  │  推送通知     │  │   错误追踪 / 监控       │  │
+│  │  Claude)     │  │              │  │                          │  │
+│  └──────────────┘  └──────────────┘  └──────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 3.2 服务职责划分
+
+| 服务 | 职责 | 关键依赖 |
+|------|------|----------|
+| **Auth Service** | 用户注册/登录、JWT 签发、OAuth2 集成 | PostgreSQL, Redis |
+| **Game Service** | 房间 CRUD、玩家管理、行动状态机、救援逻辑、事件流 | PostgreSQL, Redis, BullMQ |
+| **AI Service** | 故事解析、行动评估、叙事生成、记忆压缩 | LLM API, PostgreSQL |
+| **Worker** | BullMQ 任务处理、延迟行动完成、推送触发 | Redis, Game Service, AI Service |
+| **API Gateway** | 路由、限流、CORS、SSL | Nginx/Cloudflare |
+
+### 3.3 数据流：一次完整的行动生命周期
+
+```
+玩家输入行动
+    │
+    ▼
+Game Service 接收请求
+    │
+    ├─ 1. 验证：角色是否空闲？输入是否合规？
+    │
+    ├─ 2. 调用 AI Service → 行动评估
+    │      └─ 返回：wait_seconds, public_snippet, difficulty, risk
+    │
+    ├─ 3. 写入 DB：actions 表创建记录
+    │
+    ├─ 4. 写入 DB：events 表记录 action_start
+    │
+    ├─ 5. 创建 BullMQ 延迟任务：delay = finish_at - now()
+    │
+    └─ 6. 推送广播："XX 开始行动" 到所有在线玩家
+
+    ... 等待 wait_seconds ...
+
+BullMQ Worker 触发
+    │
+    ├─ 1. 调用 AI Service → 生成行动结果叙事
+    │
+    ├─ 2. 更新 actions 表：result_narrative, status = completed
+    │
+    ├─ 3. 写入 events 表：action_result
+    │
+    ├─ 4. 更新角色状态（如有 status_effects 变化）
+    │
+    ├─ 5. 检查游戏结束条件
+    │
+    └─ 6. 推送通知：行动完成 + 叙事摘要
+```
+
+---
+
+## 4. 技术选型
+
+| 组件 | 推荐方案 | 备选方案 | 选型理由 |
+|------|---------|---------|---------|
+| **前端** | Flutter | React Native | Flutter 动画能力强、跨平台一致性好、聊天 UI 组件成熟 |
+| **后端框架** | FastAPI (Python) | NestJS (TypeScript) | Python 对 AI/LLM 生态支持最好，FastAPI 性能优异 |
+| **AI 模型** | GPT-4o + GPT-4o-mini | Claude 3.5 Sonnet | 4o 用于叙事生成，mini 用于评估（成本差 10x） |
+| **数据库** | PostgreSQL 15+ | — | JSONB 支持灵活 schema、事件流查询性能好 |
+| **缓存** | Redis 7+ | — | 会话、限流、倒计时、Pub/Sub 实时通知 |
+| **任务队列** | BullMQ (Redis) | Celery | BullMQ 延迟任务原生支持、Dashboard 可视化 |
+| **推送通知** | Firebase FCM | APNs + FCM 直连 | 统一跨平台、免费、到达率高 |
+| **文件存储** | S3 / R2 | 本地存储 | 上传的故事文本备份、导出的故事文件 |
+| **认证** | Firebase Auth + 自建 JWT | Auth0 | Firebase Auth 免费额度大，自建 JWT 灵活控制 |
+| **错误追踪** | Sentry | Bugsnag | Python SDK 成熟、性能监控集成 |
+| **监控** | Grafana + Prometheus | Datadog | 开源免费、Dashboard 丰富 |
+| **部署** | Docker + AWS ECS / Railway | Fly.io | Railway 适合 MVP 快速部署，ECS 适合正式环境 |
+| **CI/CD** | GitHub Actions | GitLab CI | 与代码仓库集成紧密 |
+
+### 4.1 Python 依赖清单
+
+```toml
+# pyproject.toml
+[project]
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.29.0",
+    "sqlalchemy[asyncio]>=2.0.25",
+    "asyncpg>=0.29.0",
+    "alembic>=1.13.0",
+    "redis[hiredis]>=5.0.0",
+    "bullmq>=1.0.0",           # Node.js BullMQ 的 Python 客户端需通过 subprocess 调用
+    "openai>=1.30.0",
+    "httpx>=0.27.0",
+    "pydantic>=2.6.0",
+    "pydantic-settings>=2.2.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "firebase-admin>=6.4.0",
+    "sentry-sdk[fastapi]>=2.0.0",
+    "structlog>=24.1.0",
+]
+```
+
+> **注意**：BullMQ 是 Node.js 库。Python 端通过子进程调用 Node.js Worker，或使用 Python 原生的 `celery` + Redis broker 替代。MVP 阶段推荐用 `rq-scheduler` 或直接 Redis 延迟任务实现。
+
+---
+
+## 5. 数据库设计
+
+### 5.1 ER 关系概览
+
+```
+users 1──N characters N──1 games
+users 1──N actions N──1 characters
+games 1──N events
+games 1──N characters
+games 1──N actions
+games 1──N invitations
+actions 1──1 events (action_start / action_result)
+```
+
+### 5.2 核心表结构
+
+#### `users` — 用户表
+
+```sql
+CREATE TABLE users (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    username    VARCHAR(50) NOT NULL,
+    email       VARCHAR(255) UNIQUE,
+    avatar_url  TEXT,
+    push_token  TEXT,                          -- FCM device token
+    auth_provider VARCHAR(20) DEFAULT 'email', -- 'email', 'google', 'apple'
+    auth_provider_id TEXT,                     -- OAuth provider 的用户 ID
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_auth ON users(auth_provider, auth_provider_id);
+```
+
+#### `games` — 游戏房间表
+
+```sql
+CREATE TYPE game_status AS ENUM ('lobby', 'active', 'paused', 'finished', 'abandoned');
+
+CREATE TABLE games (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    creator_id          UUID NOT NULL REFERENCES users(id),
+    title               VARCHAR(200),              -- AI 生成或创建者自定义
+    uploaded_story      TEXT NOT NULL,              -- 原始故事文本
+    duration_hint       TEXT,                       -- 用户输入的自然语言时长
+    target_duration     INTERVAL,                   -- 解析后的目标时长
+    status              game_status NOT NULL DEFAULT 'lobby',
+    ai_summary          JSONB,                      -- AI 解析后的场景/目标/角色/章节计划
+    current_chapter     INT DEFAULT 1,              -- 当前章节编号
+    max_players         INT DEFAULT 6 CHECK (max_players BETWEEN 2 AND 8),
+    is_public           BOOLEAN DEFAULT FALSE,
+    invite_code         VARCHAR(8) UNIQUE,          -- 短邀请码
+    started_at          TIMESTAMPTZ,
+    finished_at         TIMESTAMPTZ,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_games_status ON games(status);
+CREATE INDEX idx_games_creator ON games(creator_id);
+CREATE INDEX idx_games_invite ON games(invite_code) WHERE invite_code IS NOT NULL;
+```
+
+#### `characters` — 角色表
+
+```sql
+CREATE TABLE characters (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    game_id         UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+    player_id       UUID REFERENCES users(id),      -- NULL = 未分配
+    name            VARCHAR(100) NOT NULL,
+    description     TEXT,
+    background      TEXT,                            -- 角色背景故事
+    status_effects  JSONB DEFAULT '{}',
+    /* 示例:
+    {
+        "health": 100,
+        "injuries": [{"type": "leg_wound", "severity": 2, "speed_penalty": 3}],
+        "items": ["torch", "rope"],
+        "skills": {"lockpicking": 3, "perception": 5}
+    }
+    */
+    location        VARCHAR(200),                   -- 当前所在场景
+    is_alive        BOOLEAN DEFAULT TRUE,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_characters_game ON characters(game_id);
+CREATE INDEX idx_characters_player ON characters(player_id) WHERE player_id IS NOT NULL;
+```
+
+#### `actions` — 行动表（进行中 + 历史）
+
+```sql
+CREATE TYPE action_status AS ENUM ('pending', 'completed', 'interrupted', 'cancelled');
+CREATE TYPE action_type AS ENUM ('normal', 'rescue', 'interaction');
+
+CREATE TABLE actions (
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    game_id           UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+    character_id      UUID NOT NULL REFERENCES characters(id),
+    player_id         UUID NOT NULL REFERENCES users(id),
+    action_type       action_type NOT NULL DEFAULT 'normal',
+    input_text        TEXT NOT NULL,                   -- 玩家原话
+    public_snippet    TEXT,                            -- AI 生成的公开描述
+    wait_seconds      INT NOT NULL,                    -- 原始等待秒数
+    started_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    finish_at         TIMESTAMPTZ NOT NULL,            -- started_at + wait_seconds，可被救援修改
+    completed_at      TIMESTAMPTZ,
+    result_narrative  TEXT,                            -- 完成后 AI 生成的叙事
+    result_effects    JSONB,                           -- 状态变化、物品获取等结构化结果
+    difficulty        VARCHAR(20),                     -- 'trivial', 'easy', 'medium', 'hard', 'extreme'
+    risk              VARCHAR(20),                     -- 'none', 'low', 'medium', 'high', 'critical'
+    is_rescue         BOOLEAN DEFAULT FALSE,
+    rescue_target_id  UUID REFERENCES actions(id),     -- 若为救援行动，指向目标行动
+    modifiers         JSONB DEFAULT '[]',
+    /* 示例:
+    [{"type": "rescue", "by_character": "uuid", "reduction_percent": 60, "at": "2026-04-29T10:30:00Z"}]
+    */
+    status            action_status NOT NULL DEFAULT 'pending',
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_actions_game_status ON actions(game_id, status);
+CREATE INDEX idx_actions_character ON actions(character_id, status);
+CREATE INDEX idx_actions_finish ON actions(finish_at) WHERE status = 'pending';
+CREATE INDEX idx_actions_player ON actions(player_id);
+```
+
+#### `events` — 全局事件流
+
+```sql
+CREATE TYPE event_type AS ENUM (
+    'game_start', 'game_end',
+    'player_join', 'player_leave',
+    'action_start', 'action_result',
+    'rescue_start', 'rescue_result',
+    'scene_change', 'chapter_advance',
+    'system_message', 'ai_narrative'
+);
+
+CREATE TABLE events (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    game_id     UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+    type        event_type NOT NULL,
+    timestamp   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    data        JSONB NOT NULL,
+    /* data 结构示例 (action_start):
+    {
+        "action_id": "uuid",
+        "character_name": "考古学家",
+        "player_name": "Alice",
+        "public_snippet": "正在搜索书桌...",
+        "wait_seconds": 150
+    }
+    */
+    is_visible  BOOLEAN DEFAULT TRUE,            -- 是否对所有玩家可见
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_events_game_time ON events(game_id, timestamp);
+CREATE INDEX idx_events_type ON events(game_id, type);
+```
+
+#### `invitations` — 邀请表
+
+```sql
+CREATE TABLE invitations (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    game_id     UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+    code        VARCHAR(8) UNIQUE NOT NULL,
+    created_by  UUID NOT NULL REFERENCES users(id),
+    max_uses    INT,                             -- NULL = 无限
+    used_count  INT DEFAULT 0,
+    expires_at  TIMESTAMPTZ,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_invitations_code ON invitations(code);
+```
+
+#### `ai_sessions` — AI 调用记录（用于成本追踪和调试）
+
+```sql
+CREATE TABLE ai_sessions (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    game_id         UUID REFERENCES games(id),
+    session_type    VARCHAR(50) NOT NULL,          -- 'story_parse', 'action_eval', 'narrative_gen', 'summary'
+    model           VARCHAR(50) NOT NULL,          -- 'gpt-4o', 'gpt-4o-mini'
+    input_tokens    INT,
+    output_tokens   INT,
+    cost_usd        DECIMAL(10, 6),
+    latency_ms      INT,
+    request_data    JSONB,                         -- 输入快照
+    response_data   JSONB,                         -- 输出快照
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_ai_sessions_game ON ai_sessions(game_id);
+CREATE INDEX idx_ai_sessions_type ON ai_sessions(session_type, created_at);
+```
+
+### 5.3 数据库迁移策略
+
+使用 Alembic 管理 schema 迁移：
+
+```bash
+# 初始化
+alembic init alembic
+
+# 创建迁移
+alembic revision --autogenerate -m "add_characters_table"
+
+# 执行迁移
+alembic upgrade head
+
+# 回滚
+alembic downgrade -1
+```
+
+### 5.4 JSON 字段设计原则
+
+- `ai_summary`：AI 解析故事后的结构化输出，schema 由 Prompt 约束
+- `status_effects`：角色状态，游戏逻辑层读写，AI 生成时参考
+- `modifiers`：行动修改历史，仅追加（append-only），用于回放和调试
+- `result_effects`：行动结果的结构化数据，用于更新角色状态
+
+---
+
+## 6. 后端服务设计
+
+### 6.1 API 规范
+
+所有接口遵循 RESTful 规范，统一响应格式：
+
+```json
+// 成功响应
+{
+    "success": true,
+    "data": { ... },
+    "meta": {
+        "page": 1,
+        "total": 100
+    }
+}
+
+// 错误响应
+{
+    "success": false,
+    "error": {
+        "code": "CHARACTER_BUSY",
+        "message": "该角色当前正在行动中，请等待完成后再试",
+        "details": {
+            "action_id": "uuid",
+            "remaining_seconds": 120
+        }
+    }
+}
+```
+
+### 6.2 核心接口设计
+
+#### 认证接口
+
+```
+POST   /api/v1/auth/register          # 注册
+POST   /api/v1/auth/login             # 登录（邮箱/密码）
+POST   /api/v1/auth/oauth/{provider}  # OAuth 登录（google/apple）
+POST   /api/v1/auth/refresh           # 刷新 token
+DELETE /api/v1/auth/logout            # 登出
+```
+
+#### 游戏接口
+
+```
+POST   /api/v1/games                  # 创建游戏
+GET    /api/v1/games                  # 获取游戏列表（公开房间）
+GET    /api/v1/games/{id}             # 获取游戏详情
+PATCH  /api/v1/games/{id}             # 更新游戏设置（仅 lobby 状态）
+DELETE /api/v1/games/{id}             # 删除游戏（仅 lobby 状态）
+
+POST   /api/v1/games/{id}/start       # 开始游戏（仅创建者）
+POST   /api/v1/games/{id}/join        # 加入游戏
+POST   /api/v1/games/{id}/leave       # 离开游戏
+
+GET    /api/v1/games/{id}/events      # 获取事件流（支持 ?since=timestamp 分页）
+GET    /api/v1/games/{id}/characters  # 获取角色列表
+GET    /api/v1/games/{id}/actions     # 获取行动列表（支持 ?status=pending 过滤）
+```
+
+#### 角色接口
+
+```
+POST   /api/v1/games/{id}/characters              # 创建/选择角色
+PATCH  /api/v1/games/{id}/characters/{char_id}    # 更新角色信息（仅 lobby）
+```
+
+#### 行动接口
+
+```
+POST   /api/v1/games/{id}/actions          # 提交行动
+GET    /api/v1/games/{id}/actions/{act_id} # 获取行动详情
+DELETE /api/v1/games/{id}/actions/{act_id} # 取消行动（仅 pending 状态）
+
+POST   /api/v1/games/{id}/rescue           # 发起救援
+```
+
+#### 6.3 关键接口详细设计
+
+**POST /api/v1/games/{id}/actions** — 提交行动
+
+```json
+// 请求
+{
+    "character_id": "char-uuid",
+    "action_text": "我搜索房间里的书桌抽屉"
+}
+
+// 成功响应 201
+{
+    "success": true,
+    "data": {
+        "action_id": "action-uuid",
+        "character_id": "char-uuid",
+        "public_snippet": "考古学家正在仔细搜索书桌的每个抽屉...",
+        "wait_seconds": 150,
+        "finish_at": "2026-04-29T10:35:00Z",
+        "difficulty": "medium",
+        "risk": "low"
+    }
+}
+
+// 错误响应 409 Conflict
+{
+    "success": false,
+    "error": {
+        "code": "CHARACTER_BUSY",
+        "message": "该角色当前正在行动中",
+        "details": {
+            "current_action_id": "uuid",
+            "remaining_seconds": 87
+        }
+    }
+}
+```
+
+**POST /api/v1/games/{id}/rescue** — 发起救援
+
+```json
+// 请求
+{
+    "helper_character_id": "char-2-uuid",
+    "target_action_id": "action-uuid",
+    "rescue_text": "我跑过去帮忙一起搜索书桌"
+}
+
+// 成功响应 201
+{
+    "success": true,
+    "data": {
+        "rescue_action_id": "rescue-action-uuid",
+        "helper_wait_seconds": 60,
+        "target_time_reduction_percent": 60,
+        "target_new_finish_at": "2026-04-29T10:25:00Z",
+        "public_snippet": "流浪商人跑过去帮考古学家一起搜索..."
+    }
+}
+```
+
+### 6.4 游戏状态机
+
+```
+                    ┌───────────┐
+                    │   lobby    │ ← 创建者可邀请、玩家加入选角色
+                    └─────┬─────┘
+                          │ 创建者点击"开始" (所有玩家已选角色)
+                          ▼
+                    ┌───────────┐
+            ┌────── │   active   │ ← 玩家输入行动、救援、AI 推进剧情
+            │       └─────┬─────┘
+            │             │ AI 判定结局 / 时长耗尽
+            │             ▼
+            │       ┌───────────┐
+            │       │  finished  │ ← 展示总结、可回看
+            │       └───────────┘
+            │
+            │ 超过 24h 无行动
+            ▼
+      ┌───────────┐
+      │ abandoned  │ ← 自动归档
+      └───────────┘
+```
+
+### 6.5 错误码规范
+
+| HTTP 状态码 | 错误码 | 说明 |
+|-------------|--------|------|
+| 400 | `INVALID_INPUT` | 输入格式错误 |
+| 400 | `ACTION_TOO_LONG` | 行动描述超过 500 字 |
+| 401 | `UNAUTHORIZED` | 未登录或 token 过期 |
+| 403 | `FORBIDDEN` | 无权操作（非房间成员） |
+| 404 | `GAME_NOT_FOUND` | 游戏不存在 |
+| 404 | `CHARACTER_NOT_FOUND` | 角色不存在 |
+| 409 | `CHARACTER_BUSY` | 角色正在行动中 |
+| 409 | `GAME_FULL` | 房间已满 |
+| 409 | `GAME_ALREADY_STARTED` | 游戏已开始 |
+| 409 | `NOT_YOUR_CHARACTER` | 该角色不属于你 |
+| 422 | `AI_PARSE_FAILED` | AI 解析故事失败 |
+| 429 | `RATE_LIMITED` | 请求过于频繁 |
+| 500 | `INTERNAL_ERROR` | 服务器内部错误 |
+
+---
+
+## 7. AI 集成方案（Prompt Engineering 核心）
+
+### 7.1 调用策略总览
+
+| 场景 | 模型 | 温度 | 预估 Token | 频率 |
+|------|------|------|-----------|------|
+| 故事解析 | GPT-4o | 0.3 | 2000~4000 | 1 次/游戏 |
+| 行动评估 | GPT-4o-mini | 0.2 | 500~1000 | 1 次/行动 |
+| 叙事生成 | GPT-4o | 0.8 | 1000~2000 | 1 次/行动完成 |
+| 救援评估 | GPT-4o-mini | 0.2 | 500~800 | 1 次/救援 |
+| 记忆压缩 | GPT-4o-mini | 0.3 | 1000~2000 | 每 5 个行动 |
+| 结局生成 | GPT-4o | 0.9 | 2000~3000 | 1 次/游戏结束 |
+
+### 7.2 故事解析器（创建游戏时）
+
+**触发时机**：创建者上传故事文本并确认
+
+**System Prompt**：
+
+```
+你是一个专业的跑团主持人助手（DM）。玩家上传了一段故事/小说文本，你需要从中提取结构化信息，为后续的游戏主持做准备。
+
+提取要求：
+1. 核心场景（地点列表）：从故事中识别所有重要地点，包含名称和简短描述
+2. 可用角色：从故事中提取或推断出适合玩家扮演的角色，包含名字和背景
+3. 主线目标：故事的核心驱动力和最终目标
+4. 章节节奏计划：根据玩家设定的目标时长，将故事切分为若干章节，每章有明确的阶段性目标
+5. 初始状态：游戏开始时的场景描述，作为开场叙事
+
+重要约束：
+- 角色数量建议 2-6 个，覆盖不同能力方向（探索、战斗、社交、知识等）
+- 每个章节的时间比例之和应为 1.0
+- 初始状态应引人入胜，让玩家有立即行动的欲望
+- 如果原文信息不足，可以合理推断和扩展，但不要偏离原文基调
+
+以严格的 JSON 返回，格式如下：
+{
+  "title": "故事标题",
+  "genre": "奇幻/科幻/悬疑/恐怖/历史/现代",
+  "tone": "严肃/轻松/黑暗/幽默",
+  "scenes": [
+    {
+      "id": "scene_1",
+      "name": "场景名称",
+      "description": "场景详细描述",
+      "connections": ["scene_2", "scene_3"],
+      "secrets": "隐藏信息（玩家探索后才能发现）"
+    }
+  ],
+  "preset_characters": [
+    {
+      "id": "char_1",
+      "name": "角色名",
+      "description": "简短描述",
+      "background": "详细背景故事",
+      "skills": ["技能1", "技能2"],
+      "personality": "性格特征",
+      "starting_location": "scene_1"
+    }
+  ],
+  "main_goal": "故事的最终目标",
+  "chapter_plan": [
+    {
+      "chapter": 1,
+      "title": "章节标题",
+      "goal": "阶段性目标",
+      "target_scene": "scene_1",
+      "approximate_duration_ratio": 0.15,
+      "key_events": ["可能触发的关键事件"]
+    }
+  ],
+  "initial_state": {
+    "narrative": "开场叙事文本（200-400字，引人入胜）",
+    "starting_location": "scene_1",
+    "available_hooks": ["可以立即探索的线索或目标"]
+  },
+  "difficulty_settings": {
+    "base_wait_multiplier": 1.0,
+    "risk_frequency": "low/medium/high"
+  }
+}
+```
+
+**User Prompt**：
+
+```
+故事文本：
+---
+{uploaded_story}
+---
+
+玩家设定的目标时长：{duration_hint}
+
+请解析上述故事并以 JSON 格式返回结构化信息。
+```
+
+### 7.3 行动评估器（提交行动时）
+
+**触发时机**：玩家提交行动文本
+
+**System Prompt**：
+
+```
+你是一个跑团主持人（DM）。玩家正在你的游戏中行动，你需要评估每个行动的等待时间和公开描述。
+
+当前游戏状态：
+- 场景：{current_scene_name} - {current_scene_desc}
+- 当前章节：第{chapter}章（{chapter_title}），目标：{chapter_goal}
+- 已过时间：{elapsed_time} / {target_duration}
+- 队伍状态：
+{characters_status}
+
+行动评估规则：
+
+等待时间（秒）：
+- 简单动作（说话、观察、拿取物品）：5-30 秒
+- 中等探索（搜索一个房间、检查一个物品）：60-300 秒
+- 复杂行动（搜寻整个区域、破解机关、长途跋涉）：300-1800 秒
+- 极复杂行动（涉及多区域、高难度挑战）：1800-3600 秒
+
+状态修正：
+- 角色有负面状态（受伤、疲惫等）：时间 ×1.5 ~ ×3
+- 角色有正面状态（增强、加速等）：时间 ×0.5 ~ ×0.8
+- 多人协作（非救援）：时间 ×0.7
+
+风险评估：
+- 探索未知区域：medium~high risk
+- 与 NPC 互动：low~medium risk
+- 使用已知安全物品：none risk
+- 尝试危险动作（攀爬、战斗）：high~critical risk
+
+返回严格的 JSON：
+{
+  "public_snippet": "角色名正在做什么...（15-50字，其他玩家可见的描述）",
+  "wait_seconds": 150,
+  "difficulty": "trivial|easy|medium|hard|extreme",
+  "risk": "none|low|medium|high|critical",
+  "hint": "给玩家的隐含提示（不会展示给其他玩家）"
+}
+```
+
+### 7.4 行动完成叙事生成器
+
+**触发时机**：BullMQ 延迟任务到期
+
+**System Prompt**：
+
+```
+你是一个才华横溢的跑团主持人（DM），擅长讲述引人入胜的故事。
+
+你现在需要根据玩家的行动和当前游戏状态，生成行动结果的叙事。
+
+游戏记忆（最近事件摘要）：
+{game_memory_summary}
+
+当前场景：{current_scene}
+角色状态：
+{character_status}
+
+行动详情：
+- 角色：{character_name}
+- 行动：{action_text}
+- 等待时长：{wait_seconds} 秒
+- 难度：{difficulty}
+- 风险：{risk}
+
+叙事要求：
+1. 结果应与行动的难度和风险匹配
+2. 高风险行动可能导致负面后果（受伤、失去物品等）
+3. 叙事应生动、有画面感，像小说一样
+4. 可以引入新的线索、物品、NPC 互动
+5. 长度 150-400 字
+6. 判断是否触发章节推进或游戏结局
+
+返回严格的 JSON：
+{
+  "narrative": "叙事正文...",
+  "outcome": "success|partial_success|failure|critical_failure",
+  "effects": {
+    "health_change": 0,
+    "new_items": ["物品名称"],
+    "lost_items": [],
+    "new_status_effects": [],
+    "location_change": null,
+    "new_clues": ["发现的线索"],
+    "npc_interaction": null
+  },
+  "scene_update": {
+    "discovered_secrets": ["scene_1_secret"],
+    "new_connections": []
+  },
+  "chapter_progress": {
+    "advance_chapter": false,
+    "progress_description": "当前章节进展描述"
+  },
+  "game_over": false,
+  "game_over_narrative": null,
+  "importance": "low|medium|high|critical",
+  "public_broadcast": true
+}
+```
+
+### 7.5 救援评估器
+
+**System Prompt**：
+
+```
+你是一个跑团主持人。一个玩家试图救援另一个正在行动中的玩家。
+
+救援者：{helper_name}（状态：{helper_status}）
+目标行动：
+- 角色：{target_name}
+- 行动：{target_action}
+- 已等待：{elapsed_seconds} / {total_wait_seconds} 秒
+- 剩余：{remaining_seconds} 秒
+
+救援描述：{rescue_text}
+
+评估规则：
+- 救援本身也需要等待时间（通常为目标剩余时间的 30-70%）
+- 救援成功率取决于描述合理性和角色能力
+- 救援可以：缩短目标等待时间、直接完成目标行动、或失败
+- 救援者自身也可能承担风险
+
+返回严格的 JSON：
+{
+  "rescue_wait_seconds": 60,
+  "success_chance": 0.8,
+  "result": "success|partial|failure",
+  "target_time_reduction_percent": 60,
+  "rescue_narrative": "救援过程的简短描述（50-100字）",
+  "rescue_effects": {
+    "helper_health_change": 0,
+    "helper_new_status": [],
+    "target_health_change": 0
+  },
+  "risk_to_helper": "none|low|medium|high"
+}
+```
+
+### 7.6 记忆管理策略
+
+```
+┌─────────────────────────────────────────────────────┐
+│                 记忆层级结构                          │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  Level 1: 原始故事文本（常驻，但通常被摘要替代）    │
+│     │                                               │
+│     ▼                                               │
+│  Level 2: AI 解析摘要（场景/角色/目标，常驻）       │
+│     │                                               │
+│     ▼                                               │
+│  Level 3: 滚动事件摘要（最近 N 个行动的压缩）      │
+│     │    每 5 个行动自动压缩一次                     │
+│     │                                               │
+│     ▼                                               │
+│  Level 4: 最近事件原文（最近 3-5 个行动的完整记录） │
+│                                                     │
+└─────────────────────────────────────────────────────┘
+```
+
+**压缩 Prompt**：
+
+```
+请将以下游戏事件压缩为简洁的摘要，保留关键信息（角色状态变化、重要发现、场景变化）。
+
+最近事件：
+{recent_events}
+
+当前角色状态：
+{characters_status}
+
+输出 100-200 字的摘要，用于后续 AI 调用的上下文。
+```
+
+### 7.7 AI 调用可靠性保障
+
+```python
+# AI 调用封装示例
+import openai
+import json
+from tenacity import retry, stop_after_attempt, wait_exponential
+
+class AIService:
+    def __init__(self):
+        self.client = openai.AsyncOpenAI()
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10)
+    )
+    async def call_with_json_response(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        model: str = "gpt-4o-mini",
+        temperature: float = 0.2,
+        max_tokens: int = 2000
+    ) -> dict:
+        """调用 LLM 并确保返回有效 JSON"""
+        response = await self.client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_format={"type": "json_object"}
+        )
+
+        content = response.choices[0].message.content
+        try:
+            result = json.loads(content)
+        except json.JSONDecodeError:
+            # 尝试提取 JSON 块
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', content)
+            if json_match:
+                result = json.loads(json_match.group())
+            else:
+                raise ValueError(f"AI 返回无效 JSON: {content[:200]}")
+
+        # 记录调用成本
+        await self._log_usage(
+            model=model,
+            input_tokens=response.usage.prompt_tokens,
+            output_tokens=response.usage.completion_tokens
+        )
+
+        return result
+
+    async def _log_usage(self, model: str, input_tokens: int, output_tokens: int):
+        """记录 AI 调用成本"""
+        cost_map = {
+            "gpt-4o": {"input": 2.50, "output": 10.00},      # per 1M tokens
+            "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+        }
+        rates = cost_map.get(model, cost_map["gpt-4o-mini"])
+        cost = (input_tokens * rates["input"] + output_tokens * rates["output"]) / 1_000_000
+        # 写入 ai_sessions 表
+        ...
+```
+
+---
+
+## 8. 前端设计要点
+
+### 8.1 技术架构
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    Flutter App                       │
+├─────────────────────────────────────────────────────┤
+│  Presentation Layer                                  │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐            │
+│  │ GameList │ │ GameRoom │ │ Profile  │  ← Pages   │
+│  └──────────┘ └──────────┘ └──────────┘            │
+├─────────────────────────────────────────────────────┤
+│  State Management (Riverpod / Bloc)                 │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐            │
+│  │GameState │ │AuthState │ │UI State  │            │
+│  └──────────┘ └──────────┘ └──────────┘            │
+├─────────────────────────────────────────────────────┤
+│  Data Layer                                          │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐            │
+│  │ API      │ │ Local    │ │ Push     │            │
+│  │ Client   │ │ Cache    │ │ Service  │            │
+│  └──────────┘ └──────────┘ └──────────┘            │
+└─────────────────────────────────────────────────────┘
+```
+
+### 8.2 界面布局
+
+**主界面 = 聊天式事件流**
+
+```
+┌─────────────────────────────────────┐
+│ ← 游戏名称          👤👥 角色面板   │
+├─────────────────────────────────────┤
+│                                     │
+│  [系统] 游戏开始，你们身处遗迹大厅  │
+│                                     │
+│  [考古学家] 正在搜索书桌...         │
+│  ████████████░░░░░  2:30 / 4:00    │
+│                                     │
+│  [流浪商人] 我检查墙上的壁画        │
+│  ██████████████████  0:45 / 1:00   │
+│                                     │
+│  [系统] 考古学家在抽屉里发现了一封  │
+│  密信，信封上印着奇怪的符文...      │
+│                                     │
+├─────────────────────────────────────┤
+│  ┌─────────────────────────────┐    │
+│  │ 输入你的行动...             │ 📤 │
+│  └─────────────────────────────┘    │
+│  [角色空闲，可以输入行动]           │
+└─────────────────────────────────────┘
+```
+
+**侧滑角色面板**
+
+```
+┌──────────────────────────────┐
+│  队伍状态                     │
+├──────────────────────────────┤
+│  🧑‍🔬 考古学家 (Alice)         │
+│     ❤️ 100/100  📍 遗迹大厅   │
+│     🎒 火把、绳索、密信       │
+│     ⏳ 正在搜索书桌 (2:30)    │
+├──────────────────────────────┤
+│  🧳 流浪商人 (Bob)            │
+│     ❤️ 100/100  📍 遗迹大厅   │
+│     🎒 匕首、金币袋           │
+│     ✅ 空闲                   │
+├──────────────────────────────┤
+│  [救援] [查看详情]            │
+└──────────────────────────────┘
+```
+
+### 8.3 状态管理
+
+使用 Riverpod 管理全局状态：
+
+```dart
+// 游戏状态 Provider
+@riverpod
+class GameState extends _$GameState {
+    @override
+    Future<GameStateData> build(String gameId) async {
+        final events = await ref.read(apiProvider).getEvents(gameId);
+        final characters = await ref.read(apiProvider).getCharacters(gameId);
+        final actions = await ref.read(apiProvider).getActions(gameId);
+        return GameStateData(events: events, characters: characters, actions: actions);
+    }
+
+    Future<void> submitAction(String characterId, String actionText) async {
+        // 调用 API、乐观更新 UI、处理错误
+    }
+
+    Future<void> rescue(String helperId, String targetActionId, String text) async {
+        // 救援逻辑
+    }
+}
+```
+
+### 8.4 离线体验与同步
+
+- **增量同步**：进入游戏时拉取 `?since=last_timestamp` 的事件增量
+- **本地缓存**：使用 Hive/Isar 缓存最近 100 条事件
+- **倒计时**：由后端 `finish_at` 字段驱动，前端仅展示近似值，每秒刷新
+- **推送通知**：FCM + 本地通知双保险，App 不在前台时也能收到提醒
+- **同步策略**：30 秒轮询（省电）或 WebSocket（实时性更好），MVP 阶段用轮询
+
+### 8.5 推送通知处理
+
+```dart
+// FCM 消息处理
+class PushService {
+    void handleMessage(RemoteMessage message) {
+        final type = message.data['type'];
+        switch (type) {
+            case 'action_complete':
+                // 刷新游戏状态、展示通知
+                break;
+            case 'rescue_received':
+                // 展示救援通知、更新倒计时
+                break;
+            case 'game_over':
+                // 跳转到结局页面
+                break;
+        }
+    }
+}
+```
+
+---
+
+## 9. 推送通知策略
+
+### 9.1 通知分类
+
+| 事件类型 | 推送标题 | 推送内容 | 优先级 | 触发条件 |
+|----------|---------|---------|--------|---------|
+| 自己的行动完成 | "你的行动结果出来了！" | 结果摘要（50字内） | 高 | BullMQ 任务完成 |
+| 他人行动完成 | "{角色名}完成了行动" | 结果摘要 | 中 | 同上，非本人 |
+| 被救援 | "有人来帮你了！" | 救援描述 | 高 | 救援行动完成 |
+| 救援成功 | "你成功帮助了{角色名}！" | 救援结果 | 中 | 救援行动完成 |
+| 故事重要转折 | "发生了一件大事..." | 事件描述 | 高 | AI 判定 importance = critical |
+| 章节推进 | "故事进入新阶段" | 新章节标题 | 中 | 章节切换 |
+| 游戏结束 | "故事落幕" | 结局预告 | 高 | 游戏结束 |
+| 长时间未行动 | "你的队友在等你..." | 温和提醒 | 低 | 空闲 > 30 分钟 |
+
+### 9.2 通知频率控制
+
+```python
+class NotificationThrottle:
+    """防止通知轰炸"""
+
+    def __init__(self, redis_client):
+        self.redis = redis_client
+
+    async def should_send(self, user_id: str, notification_type: str) -> bool:
+        key = f"notif:{user_id}:{notification_type}"
+
+        # 同类型通知最短间隔 30 秒
+        if await self.redis.exists(key):
+            return False
+
+        # 每小时最多 20 条通知
+        hourly_key = f"notif_count:{user_id}"
+        count = await self.redis.incr(hourly_key)
+        if count == 1:
+            await self.redis.expire(hourly_key, 3600)
+        if count > 20:
+            return False
+
+        # 设置冷却
+        await self.redis.setex(key, 30, "1")
+        return True
+```
+
+---
+
+## 10. 游戏逻辑实现细节
+
+### 10.1 等待时间动态修改（救援）
+
+```python
+async def process_rescue(rescue_action: Action, target_action: Action, reduction_percent: float):
+    """处理救援行动完成"""
+    now = datetime.utcnow()
+
+    # 计算目标行动的剩余时间
+    remaining = (target_action.finish_at - now).total_seconds()
+
+    if remaining <= 0:
+        # 目标行动已完成，救援降级为普通互动
+        return
+
+    # 计算缩短后的时间
+    new_remaining = remaining * (1 - reduction_percent / 100)
+    new_finish_at = now + timedelta(seconds=max(new_remaining, 5))  # 最少保留 5 秒
+
+    # 更新数据库
+    target_action.finish_at = new_finish_at
+    target_action.modifiers = target_action.modifiers + [{
+        "type": "rescue",
+        "by_character": str(rescue_action.character_id),
+        "reduction_percent": reduction_percent,
+        "old_finish_at": target_action.finish_at.isoformat(),
+        "new_finish_at": new_finish_at.isoformat(),
+        "at": now.isoformat()
+    }]
+
+    # 重新调度 BullMQ 任务
+    await reschedule_job(
+        job_id=str(target_action.id),
+        new_delay=int(new_remaining)
+    )
+
+    # 写入事件
+    await create_event(
+        game_id=target_action.game_id,
+        type="rescue_result",
+        data={
+            "rescue_action_id": str(rescue_action.id),
+            "target_action_id": str(target_action.id),
+            "reduction_percent": reduction_percent,
+            "narrative": rescue_action.result_narrative
+        }
+    )
+```
+
+### 10.2 并发行动限制
+
+```python
+async def validate_action_submission(game_id: str, character_id: str) -> None:
+    """验证行动提交的前置条件"""
+
+    # 1. 检查角色是否已有 pending 行动
+    existing = await db.execute(
+        select(Action).where(
+            Action.character_id == character_id,
+            Action.status == 'pending'
+        )
+    )
+    if existing:
+        raise ConflictError(
+            code="CHARACTER_BUSY",
+            message="该角色当前正在行动中",
+            details={
+                "action_id": str(existing.id),
+                "remaining_seconds": int((existing.finish_at - datetime.utcnow()).total_seconds())
+            }
+        )
+
+    # 2. 检查游戏状态
+    game = await db.get(Game, game_id)
+    if game.status != 'active':
+        raise ConflictError(code="GAME_NOT_ACTIVE", message="游戏未在进行中")
+
+    # 3. 检查角色是否存活
+    character = await db.get(Character, character_id)
+    if not character.is_alive:
+        raise ConflictError(code="CHARACTER_DEAD", message="该角色已无法行动")
+
+    # 4. 检查行动冷却（防止刷接口）
+    cooldown_key = f"action_cooldown:{character_id}"
+    if await redis.exists(cooldown_key):
+        raise RateLimitError(message="行动冷却中，请稍后再试")
+```
+
+### 10.3 游戏结束条件判断
+
+```python
+async def check_game_end(game: Game) -> tuple[bool, str | None]:
+    """检查游戏是否应该结束"""
+
+    # 条件 1：AI 判定故事已到结局（在行动结果中返回 game_over = true）
+    # 这个在叙事生成时已处理
+
+    # 条件 2：时长耗尽
+    if game.target_duration:
+        elapsed = datetime.utcnow() - game.started_at
+        if elapsed >= game.target_duration:
+            return True, "时长耗尽"
+
+        # 接近结束时（剩余 10%），在 AI 提示中添加收束指令
+        if elapsed >= game.target_duration * 0.9:
+            return False, "approaching_end"  # 传给 AI，暗示收束
+
+    # 条件 3：所有角色死亡
+    alive_count = await db.execute(
+        select(func.count(Character.id)).where(
+            Character.game_id == game.id,
+            Character.is_alive == True
+        )
+    )
+    if alive_count == 0:
+        return True, "全军覆没"
+
+    # 条件 4：长时间无活动（24 小时）
+    last_event = await db.execute(
+        select(Event).where(Event.game_id == game.id).order_by(Event.timestamp.desc()).limit(1)
+    )
+    if last_event and (datetime.utcnow() - last_event.timestamp) > timedelta(hours=24):
+        return True, "长时间无活动"
+
+    return False, None
+```
+
+---
+
+## 11. 安全与内容治理
+
+### 11.1 输入安全
+
+```python
+from openai import OpenAI
+
+moderation_client = OpenAI()
+
+async def moderate_content(text: str) -> tuple[bool, str | None]:
+    """使用 OpenAI Moderation API 检测不当内容"""
+    response = moderation_client.moderations.create(input=text)
+    result = response.results[0]
+
+    if result.flagged:
+        categories = [k for k, v in result.categories.model_dump().items() if v]
+        return False, f"内容包含不当信息: {', '.join(categories)}"
+
+    return True, None
+
+# 在行动提交时调用
+async def submit_action(game_id: str, request: ActionRequest):
+    # 1. 内容安全检查
+    is_safe, reason = await moderate_content(request.action_text)
+    if not is_safe:
+        raise ValidationError(code="INAPPROPRIATE_CONTENT", message=reason)
+
+    # 2. 长度限制
+    if len(request.action_text) > 500:
+        raise ValidationError(code="ACTION_TOO_LONG", message="行动描述不能超过 500 字")
+
+    # 3. 基础过滤（注入攻击防护）
+    if contains_injection_patterns(request.action_text):
+        raise ValidationError(code="INVALID_INPUT", message="输入包含非法字符")
+
+    # ... 继续正常流程
+```
+
+### 11.2 AI 输出安全
+
+```python
+async def validate_ai_output(output: dict, output_type: str) -> dict:
+    """验证 AI 输出的合理性和安全性"""
+
+    if output_type == "action_eval":
+        # 等待时间合理性检查
+        if output["wait_seconds"] < 0 or output["wait_seconds"] > 7200:
+            output["wait_seconds"] = min(max(output["wait_seconds"], 5), 3600)
+
+        # 公开描述长度检查
+        if len(output["public_snippet"]) > 200:
+            output["public_snippet"] = output["public_snippet"][:200] + "..."
+
+    elif output_type == "narrative":
+        # 叙事长度检查
+        if len(output["narrative"]) > 2000:
+            output["narrative"] = output["narrative"][:2000] + "..."
+
+        # 确保 effects 结构正确
+        required_effects = ["health_change", "new_items", "lost_items"]
+        for key in required_effects:
+            if key not in output.get("effects", {}):
+                output.setdefault("effects", {})[key] = [] if key != "health_change" else 0
+
+    return output
+```
+
+### 11.3 认证与授权
+
+```python
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+security = HTTPBearer()
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+) -> User:
+    """JWT 验证中间件"""
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        user = await db.get(User, payload["sub"])
+        if not user:
+            raise HTTPException(status_code=401, detail="用户不存在")
+        return user
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token 已过期")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="无效的 Token")
+
+async def require_game_member(game_id: str, user: User = Depends(get_current_user)) -> Game:
+    """检查用户是否为游戏成员"""
+    game = await db.get(Game, game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="游戏不存在")
+
+    member = await db.execute(
+        select(Character).where(
+            Character.game_id == game_id,
+            Character.player_id == user.id
+        )
+    )
+    if not member and game.creator_id != user.id:
+        raise HTTPException(status_code=403, detail="你不是该游戏的成员")
+
+    return game
+```
+
+### 11.4 速率限制
+
+```python
+from fastapi import Request
+from starlette.middleware.base import BaseHTTPMiddleware
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app, redis_client):
+        super().__init__(app)
+        self.redis = redis_client
+
+    async def dispatch(self, request: Request, call_next):
+        # 获取客户端标识
+        client_id = request.client.host
+        user_id = getattr(request.state, 'user_id', None)
+        key = f"rate:{user_id or client_id}"
+
+        # 滑动窗口限流
+        now = int(time.time())
+        window = 60  # 1 分钟窗口
+        max_requests = 60 if user_id else 20  # 认证用户更宽松
+
+        pipe = self.redis.pipeline()
+        pipe.zremrangebyscore(key, 0, now - window)
+        pipe.zadd(key, {str(now): now})
+        pipe.zcard(key)
+        pipe.expire(key, window)
+        results = await pipe.execute()
+
+        request_count = results[2]
+        if request_count > max_requests:
+            return JSONResponse(
+                status_code=429,
+                content={"error": {"code": "RATE_LIMITED", "message": "请求过于频繁"}}
+            )
+
+        return await call_next(request)
+```
+
+---
+
+## 12. 测试策略
+
+### 12.1 测试金字塔
+
+```
+┌─────────────────────────────────────┐
+│           E2E Tests (10%)           │  ← 关键用户流程
+│        Playwright / Appium          │
+├─────────────────────────────────────┤
+│      Integration Tests (30%)        │  ← API 接口、数据库交互
+│       pytest + httpx + test DB      │
+├─────────────────────────────────────┤
+│         Unit Tests (60%)            │  ← 业务逻辑、AI 输出处理
+│          pytest + mocks             │
+└─────────────────────────────────────┘
+```
+
+### 12.2 关键测试场景
+
+```python
+# tests/test_game_logic.py
+
+class TestActionSubmission:
+    async def test_submit_action_success(self, client, game, character):
+        """正常提交行动"""
+        response = await client.post(f"/api/v1/games/{game.id}/actions", json={
+            "character_id": str(character.id),
+            "action_text": "我搜索书桌"
+        })
+        assert response.status_code == 201
+        data = response.json()["data"]
+        assert "action_id" in data
+        assert data["wait_seconds"] > 0
+
+    async def test_submit_action_character_busy(self, client, game, busy_character):
+        """角色忙碌时提交行动应返回 409"""
+        response = await client.post(f"/api/v1/games/{game.id}/actions", json={
+            "character_id": str(busy_character.id),
+            "action_text": "我搜索书架"
+        })
+        assert response.status_code == 409
+        assert response.json()["error"]["code"] == "CHARACTER_BUSY"
+
+    async def test_rescue_reduces_wait_time(self, client, game, helper, target_action):
+        """救援应缩短目标等待时间"""
+        original_finish = target_action.finish_at
+
+        response = await client.post(f"/api/v1/games/{game.id}/rescue", json={
+            "helper_character_id": str(helper.id),
+            "target_action_id": str(target_action.id),
+            "rescue_text": "我帮忙一起搜索"
+        })
+        assert response.status_code == 201
+
+        # 验证目标行动的 finish_at 已更新
+        updated_action = await db.get(Action, target_action.id)
+        assert updated_action.finish_at < original_finish
+
+class TestAIIntegration:
+    async def test_story_parser_returns_valid_json(self, ai_service):
+        """AI 故事解析器应返回有效 JSON"""
+        result = await ai_service.parse_story(
+            "在古老的遗迹深处，封印着一件神器...",
+            duration_hint="8小时"
+        )
+        assert "scenes" in result
+        assert "preset_characters" in result
+        assert "chapter_plan" in result
+        assert sum(c["approximate_duration_ratio"] for c in result["chapter_plan"]) == pytest.approx(1.0)
+
+    async def test_action_eval_respects_time_bounds(self, ai_service):
+        """行动评估的等待时间应在合理范围内"""
+        result = await ai_service.evaluate_action(
+            action_text="我拿起桌上的杯子",
+            scene="书房",
+            character_status={}
+        )
+        assert 5 <= result["wait_seconds"] <= 3600
+```
+
+### 12.3 AI Mock 策略
+
+```python
+# tests/conftest.py
+
+@pytest.fixture
+def mock_ai_service():
+    """Mock AI 服务，避免测试时消耗 API 额度"""
+    service = AsyncMock(spec=AIService)
+
+    # 预设常见返回值
+    service.evaluate_action.return_value = {
+        "public_snippet": "正在搜索...",
+        "wait_seconds": 150,
+        "difficulty": "medium",
+        "risk": "low"
+    }
+
+    service.generate_narrative.return_value = {
+        "narrative": "你在抽屉里发现了一封密信...",
+        "outcome": "success",
+        "effects": {"new_items": ["密信"], "health_change": 0},
+        "game_over": False,
+        "importance": "medium"
+    }
+
+    return service
+```
+
+---
+
+## 13. 成本优化
+
+### 13.1 AI 调用成本分析
+
+| 调用类型 | 模型 | 平均输入 Token | 平均输出 Token | 单次成本 | 每局预估次数 | 每局成本 |
+|----------|------|---------------|---------------|---------|-------------|---------|
+| 故事解析 | GPT-4o | 3000 | 2000 | $0.0275 | 1 | $0.0275 |
+| 行动评估 | GPT-4o-mini | 800 | 300 | $0.0003 | 30 | $0.009 |
+| 叙事生成 | GPT-4o | 1500 | 800 | $0.0118 | 30 | $0.354 |
+| 救援评估 | GPT-4o-mini | 600 | 200 | $0.0002 | 5 | $0.001 |
+| 记忆压缩 | GPT-4o-mini | 1200 | 400 | $0.0004 | 6 | $0.0024 |
+| **总计** | | | | | | **~$0.39** |
+
+### 13.2 优化策略
+
+```python
+class CostOptimizer:
+    """AI 调用成本优化"""
+
+    def __init__(self, redis_client):
+        self.redis = redis_client
+
+    async def get_cached_evaluation(self, action_text_hash: str) -> dict | None:
+        """缓存相同行动的评估结果"""
+        cached = await self.redis.get(f"eval_cache:{action_text_hash}")
+        if cached:
+            return json.loads(cached)
+        return None
+
+    async def cache_evaluation(self, action_text_hash: str, result: dict):
+        """缓存评估结果（10 分钟过期）"""
+        await self.redis.setex(
+            f"eval_cache:{action_text_hash}",
+            600,
+            json.dumps(result)
+        )
+
+    def select_model(self, task_type: str, context_length: int) -> str:
+        """根据任务类型选择模型"""
+        model_mapping = {
+            "story_parse": "gpt-4o",           # 需要创造性
+            "action_eval": "gpt-4o-mini",      # 结构化评估，mini 足够
+            "narrative_gen": "gpt-4o",         # 需要文学性
+            "rescue_eval": "gpt-4o-mini",      # 结构化评估
+            "memory_compress": "gpt-4o-mini",  # 摘要任务
+            "ending_gen": "gpt-4o",            # 需要创造性
+        }
+        return model_mapping.get(task_type, "gpt-4o-mini")
+```
+
+### 13.3 其他成本控制
+
+| 手段 | 说明 | 预估节省 |
+|------|------|---------|
+| 行动评估用 mini | 评估任务对创造性要求不高 | 90% 评估成本 |
+| 相同行动结果缓存 | 避免重复评估 | 5-10% |
+| 行动冷却 10-30 秒 | 防止刷接口 | 减少无效调用 |
+| Token 预算控制 | 限制每次调用的 max_tokens | 20-30% |
+| 批量压缩 | 积累多个事件后一次性压缩 | 减少调用次数 |
+
+---
+
+## 14. 部署与运维
+
+### 14.1 Docker Compose 配置
+
+```yaml
+# docker-compose.yml
+version: "3.8"
+
+services:
+  api:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://user:pass@postgres:5432/gamedb
+      - REDIS_URL=redis://redis:6379/0
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - FIREBASE_CREDENTIALS=/firebase.json
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./firebase.json:/firebase.json:ro
+
+  worker:
+    build: ./backend
+    command: python -m workers.action_worker
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://user:pass@postgres:5432/gamedb
+      - REDIS_URL=redis://redis:6379/0
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      - postgres
+      - redis
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: gamedb
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+
+  # 监控（可选）
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+
+volumes:
+  pgdata:
+  redisdata:
+```
+
+### 14.2 Worker 进程
+
+```python
+# workers/action_worker.py
+import asyncio
+from bullmq import Worker
+from services.game_service import GameService
+from services.ai_service import AIService
+
+async def process_action(job):
+    """处理延迟行动任务"""
+    action_id = job.data["action_id"]
+    game_service = GameService()
+    ai_service = AIService()
+
+    # 1. 获取行动详情
+    action = await game_service.get_action(action_id)
+    if action.status != "pending":
+        return  # 已被取消或中断
+
+    # 2. 调用 AI 生成叙事
+    game_context = await game_service.get_game_context(action.game_id)
+    narrative = await ai_service.generate_narrative(action, game_context)
+
+    # 3. 更新行动状态
+    await game_service.complete_action(action_id, narrative)
+
+    # 4. 更新角色状态
+    await game_service.apply_effects(action.character_id, narrative["effects"])
+
+    # 5. 检查游戏结束
+    should_end, reason = await game_service.check_game_end(action.game_id)
+    if should_end:
+        await game_service.end_game(action.game_id, reason)
+
+    # 6. 推送通知
+    await game_service.notify_action_complete(action, narrative)
+
+# 启动 Worker
+worker = Worker("action-queue", process_action, {"connection": redis_connection})
+asyncio.run(worker.run())
+```
+
+### 14.3 监控指标
+
+| 指标 | 告警阈值 | 说明 |
+|------|---------|------|
+| API 响应时间 P99 | > 2s | 接口性能 |
+| AI 调用延迟 P95 | > 10s | LLM 响应慢 |
+| AI 调用失败率 | > 5% | API 可用性 |
+| 行动任务超时率 | > 2% | BullMQ 任务堆积 |
+| 推送到达率 | < 80% | FCM 问题 |
+| 数据库连接池使用率 | > 80% | 连接不足 |
+| Redis 内存使用率 | > 80% | 缓存压力 |
+| 错误日志频率 | > 10/min | 系统异常 |
+
+### 14.4 日志规范
+
+```python
+import structlog
+
+logger = structlog.get_logger()
+
+# 结构化日志示例
+logger.info(
+    "action_submitted",
+    game_id=str(game.id),
+    character_id=str(character.id),
+    action_text=action_text[:50],  # 截断，避免日志过大
+    wait_seconds=result["wait_seconds"],
+    difficulty=result["difficulty"],
+    user_id=str(user.id)
+)
+
+logger.error(
+    "ai_call_failed",
+    service="action_eval",
+    model="gpt-4o-mini",
+    error=str(e),
+    retry_count=retry_count,
+    game_id=str(game.id)
+)
+```
+
+---
+
+## 15. 可扩展性设计
+
+### 15.1 水平扩展
+
+```
+┌─────────────────────────────────────────────┐
+│              Load Balancer                   │
+└─────────────┬───────────────┬───────────────┘
+              │               │
+              ▼               ▼
+        ┌──────────┐   ┌──────────┐
+        │ API 实例1 │   │ API 实例2 │   ← 无状态，随时扩缩
+        └──────────┘   └──────────┘
+              │               │
+              ▼               ▼
+        ┌──────────────────────────┐
+        │    Redis (Shared State)   │
+        └──────────────────────────┘
+              │
+              ▼
+        ┌──────────────────────────┐
+        │  PostgreSQL (Primary +    │
+        │    Read Replicas)         │
+        └──────────────────────────┘
+```
+
+- **API 服务**：无状态，通过 Docker replicas 水平扩展
+- **Worker 进程**：BullMQ 支持多 Worker 并发处理
+- **数据库**：读写分离，读操作走 replica
+- **Redis**：单实例足够（MVP），后续可升级为 Redis Cluster
+
+### 15.2 数据库分区策略
+
+当 `events` 表增长到千万级别时，按 `game_id` 进行范围分区：
+
+```sql
+CREATE TABLE events (
+    -- ... 字段同上
+) PARTITION BY RANGE (created_at);
+
+-- 按月分区
+CREATE TABLE events_2026_04 PARTITION OF events
+    FOR VALUES FROM ('2026-04-01') TO ('2026-05-01');
+
+CREATE TABLE events_2026_05 PARTITION OF events
+    FOR VALUES FROM ('2026-05-01') TO ('2026-06-01');
+```
+
+### 15.3 缓存策略
+
+```python
+class GameCache:
+    """游戏相关缓存"""
+
+    async def get_active_actions(self, game_id: str) -> list[dict]:
+        """获取游戏的活跃行动（缓存 5 秒）"""
+        key = f"game:{game_id}:active_actions"
+        cached = await self.redis.get(key)
+        if cached:
+            return json.loads(cached)
+
+        actions = await db.fetch_active_actions(game_id)
+        await self.redis.setex(key, 5, json.dumps(actions, default=str))
+        return actions
+
+    async def get_character_status(self, character_id: str) -> dict:
+        """获取角色状态（缓存 10 秒）"""
+        key = f"character:{character_id}:status"
+        cached = await self.redis.get(key)
+        if cached:
+            return json.loads(cached)
+
+        status = await db.fetch_character_status(character_id)
+        await self.redis.setex(key, 10, json.dumps(status, default=str))
+        return status
+
+    async def invalidate_game(self, game_id: str):
+        """游戏状态变更时清除相关缓存"""
+        pattern = f"game:{game_id}:*"
+        keys = await self.redis.keys(pattern)
+        if keys:
+            await self.redis.delete(*keys)
+```
+
+---
+
+## 16. 多模型适配器（支持各类 AI 接入）
+
+### 16.1 设计目标
+
+系统需要支持多种 AI 模型接入方式，包括但不限于：
+- **主流 API**：OpenAI、Claude（Anthropic）、Google Gemini
+- **国内大模型**：通义千问、文心一言、智谱 GLM、Moonshot、DeepSeek
+- **第三方 API 中转站**：各种 OpenAI-compatible 的代理服务
+- **本地部署模型**：Ollama、vLLM、llama.cpp 等自托管方案
+- **非知名模型/小众 API**：任何兼容 OpenAI API 格式的服务
+
+### 16.2 统一适配器架构
+
+```python
+# app/services/ai_providers/base.py
+from abc import ABC, abstractmethod
+from typing import Optional
+from pydantic import BaseModel
+
+
+class LLMResponse(BaseModel):
+    content: str
+    input_tokens: int = 0
+    output_tokens: int = 0
+    model: str = ""
+
+
+class BaseLLMProvider(ABC):
+    """LLM 提供者基类"""
+
+    @abstractmethod
+    async def chat(
+        self,
+        messages: list[dict],
+        model: str,
+        temperature: float = 0.2,
+        max_tokens: int = 2000,
+        json_mode: bool = False,
+    ) -> LLMResponse:
+        pass
+
+    @abstractmethod
+    def get_available_models(self) -> list[str]:
+        pass
+```
+
+### 16.3 OpenAI Compatible 适配器（覆盖大多数场景）
+
+大多数第三方 API 中转站、本地部署模型都兼容 OpenAI API 格式，只需修改 `base_url` 和 `api_key`：
+
+```python
+# app/services/ai_providers/openai_compatible.py
+import openai
+from .base import BaseLLMProvider, LLMResponse
+
+
+class OpenAICompatibleProvider(BaseLLMProvider):
+    """
+    OpenAI 兼容适配器
+    适用于：OpenAI 官方、各种 API 中转站、Ollama、vLLM、llama.cpp server 等
+    """
+
+    def __init__(
+        self,
+        api_key: str = "sk-placeholder",
+        base_url: str = "https://api.openai.com/v1",
+        default_model: str = "gpt-4o-mini",
+    ):
+        self.client = openai.AsyncOpenAI(
+            api_key=api_key,
+            base_url=base_url,
+        )
+        self.default_model = default_model
+
+    async def chat(
+        self,
+        messages: list[dict],
+        model: str | None = None,
+        temperature: float = 0.2,
+        max_tokens: int = 2000,
+        json_mode: bool = False,
+    ) -> LLMResponse:
+        model = model or self.default_model
+
+        kwargs = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+
+        # 部分模型/API 不支持 json_mode，需要兼容处理
+        if json_mode:
+            try:
+                kwargs["response_format"] = {"type": "json_object"}
+                response = await self.client.chat.completions.create(**kwargs)
+            except Exception:
+                # 回退：不使用 json_mode，在 prompt 中要求 JSON
+                del kwargs["response_format"]
+                response = await self.client.chat.completions.create(**kwargs)
+        else:
+            response = await self.client.chat.completions.create(**kwargs)
+
+        return LLMResponse(
+            content=response.choices[0].message.content or "",
+            input_tokens=getattr(response.usage, "prompt_tokens", 0) if response.usage else 0,
+            output_tokens=getattr(response.usage, "completion_tokens", 0) if response.usage else 0,
+            model=model,
+        )
+
+    def get_available_models(self) -> list[str]:
+        return [self.default_model]
+```
+
+### 16.4 Claude（Anthropic）适配器
+
+```python
+# app/services/ai_providers/anthropic_provider.py
+import anthropic
+from .base import BaseLLMProvider, LLMResponse
+
+
+class AnthropicProvider(BaseLLMProvider):
+    """Anthropic Claude 适配器"""
+
+    def __init__(self, api_key: str, default_model: str = "claude-3-5-sonnet-20241022"):
+        self.client = anthropic.AsyncAnthropic(api_key=api_key)
+        self.default_model = default_model
+
+    async def chat(
+        self,
+        messages: list[dict],
+        model: str | None = None,
+        temperature: float = 0.2,
+        max_tokens: int = 2000,
+        json_mode: bool = False,
+    ) -> LLMResponse:
+        model = model or self.default_model
+
+        # Claude 的 messages 格式需要转换
+        system_msg = ""
+        claude_messages = []
+        for msg in messages:
+            if msg["role"] == "system":
+                system_msg = msg["content"]
+            else:
+                claude_messages.append(msg)
+
+        # JSON 模式：在 system prompt 中添加指令
+        if json_mode:
+            system_msg += "\n\n请严格以 JSON 格式返回结果。"
+
+        response = await self.client.messages.create(
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            system=system_msg,
+            messages=claude_messages,
+        )
+
+        content = response.content[0].text if response.content else ""
+        return LLMResponse(
+            content=content,
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+            model=model,
+        )
+
+    def get_available_models(self) -> list[str]:
+        return [
+            "claude-3-5-sonnet-20241022",
+            "claude-3-5-haiku-20241022",
+            "claude-3-opus-20240229",
+        ]
+```
+
+### 16.5 统一 AI 服务层
+
+```python
+# app/services/ai_service.py
+import json
+import re
+from tenacity import retry, stop_after_attempt, wait_exponential
+from app.config import get_settings
+from app.services.ai_providers.base import BaseLLMProvider, LLMResponse
+from app.services.ai_providers.openai_compatible import OpenAICompatibleProvider
+from app.services.ai_providers.anthropic_provider import AnthropicProvider
+
+
+class AIService:
+    """统一 AI 服务，支持多模型切换"""
+
+    def __init__(self):
+        settings = get_settings()
+        self.providers: dict[str, BaseLLMProvider] = {}
+        self._init_providers(settings)
+
+    def _init_providers(self, settings):
+        # 初始化 OpenAI 兼容提供者（默认）
+        if settings.AI_API_KEY:
+            self.providers["default"] = OpenAICompatibleProvider(
+                api_key=settings.AI_API_KEY,
+                base_url=settings.AI_BASE_URL,
+                default_model=settings.AI_MODEL_DEFAULT,
+            )
+            # 高质量模型（用于叙事生成）
+            self.providers["premium"] = OpenAICompatibleProvider(
+                api_key=settings.AI_API_KEY,
+                base_url=settings.AI_BASE_URL,
+                default_model=settings.AI_MODEL_PREMIUM,
+            )
+
+        # 初始化 Claude 提供者（可选）
+        if settings.ANTHROPIC_API_KEY:
+            self.providers["claude"] = AnthropicProvider(
+                api_key=settings.ANTHROPIC_API_KEY,
+            )
+
+        # 备用中转站（可选）
+        if settings.AI_FALLBACK_API_KEY and settings.AI_FALLBACK_BASE_URL:
+            self.providers["fallback"] = OpenAICompatibleProvider(
+                api_key=settings.AI_FALLBACK_API_KEY,
+                base_url=settings.AI_FALLBACK_BASE_URL,
+                default_model=settings.AI_FALLBACK_MODEL,
+            )
+
+    def _get_provider(self, provider_name: str = "default") -> BaseLLMProvider:
+        if provider_name not in self.providers:
+            # 回退到默认提供者
+            if "default" in self.providers:
+                return self.providers["default"]
+            raise ValueError(f"AI provider '{provider_name}' not configured")
+        return self.providers[provider_name]
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+    async def call_json(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        provider: str = "default",
+        model: str | None = None,
+        temperature: float = 0.2,
+        max_tokens: int = 2000,
+    ) -> dict:
+        """调用 LLM 并确保返回有效 JSON"""
+        llm = self._get_provider(provider)
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        response = await llm.chat(
+            messages=messages,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            json_mode=True,
+        )
+
+        # 解析 JSON
+        content = response.content
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            match = re.search(r"\{[\s\S]*\}", content)
+            if match:
+                return json.loads(match.group())
+            raise ValueError(f"AI returned invalid JSON: {content[:200]}")
+
+    async def call_text(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        provider: str = "default",
+        model: str | None = None,
+        temperature: float = 0.7,
+        max_tokens: int = 2000,
+    ) -> str:
+        """调用 LLM 获取文本响应"""
+        llm = self._get_provider(provider)
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        response = await llm.chat(
+            messages=messages,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            json_mode=False,
+        )
+        return response.content
+```
+
+### 16.6 配置文件
+
+```python
+# app/config.py 新增字段
+class Settings(BaseSettings):
+    # ... 原有字段 ...
+
+    # AI 配置 - 统一接口
+    AI_PROVIDER: str = "openai"  # openai / anthropic / local / custom
+    AI_API_KEY: str = ""
+    AI_BASE_URL: str = "https://api.openai.com/v1"
+    AI_MODEL_DEFAULT: str = "gpt-4o-mini"      # 评估、压缩等
+    AI_MODEL_PREMIUM: str = "gpt-4o"           # 叙事生成等
+
+    # Claude 配置（可选）
+    ANTHROPIC_API_KEY: str = ""
+
+    # 备用 API（可选，用于故障转移）
+    AI_FALLBACK_API_KEY: str = ""
+    AI_FALLBACK_BASE_URL: str = ""
+    AI_FALLBACK_MODEL: str = ""
+```
+
+### 16.7 常见接入场景配置示例
+
+#### 场景 1：使用 OpenAI 官方 API
+
+```bash
+AI_PROVIDER=openai
+AI_API_KEY=sk-your-openai-key
+AI_BASE_URL=https://api.openai.com/v1
+AI_MODEL_DEFAULT=gpt-4o-mini
+AI_MODEL_PREMIUM=gpt-4o
+```
+
+#### 场景 2：使用国内 API 中转站
+
+```bash
+AI_PROVIDER=openai
+AI_API_KEY=your-proxy-key
+AI_BASE_URL=https://your-proxy.com/v1  # 替换为实际中转站地址
+AI_MODEL_DEFAULT=gpt-4o-mini           # 或中转站支持的其他模型名
+AI_MODEL_PREMIUM=gpt-4o
+```
+
+#### 场景 3：使用 DeepSeek
+
+```bash
+AI_PROVIDER=openai
+AI_API_KEY=sk-your-deepseek-key
+AI_BASE_URL=https://api.deepseek.com/v1
+AI_MODEL_DEFAULT=deepseek-chat
+AI_MODEL_PREMIUM=deepseek-chat
+```
+
+#### 场景 4：使用通义千问（DashScope）
+
+```bash
+AI_PROVIDER=openai
+AI_API_KEY=sk-your-dashscope-key
+AI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+AI_MODEL_DEFAULT=qwen-turbo
+AI_MODEL_PREMIUM=qwen-plus
+```
+
+#### 场景 5：使用本地 Ollama
+
+```bash
+AI_PROVIDER=openai
+AI_API_KEY=ollama
+AI_BASE_URL=http://localhost:11434/v1
+AI_MODEL_DEFAULT=qwen2.5:7b
+AI_MODEL_PREMIUM=qwen2.5:14b
+```
+
+#### 场景 6：使用 vLLM 自部署
+
+```bash
+AI_PROVIDER=openai
+AI_API_KEY=not-needed
+AI_BASE_URL=http://your-gpu-server:8000/v1
+AI_MODEL_DEFAULT=your-model-name
+AI_MODEL_PREMIUM=your-model-name
+```
+
+#### 场景 7：使用 Claude（Anthropic）
+
+```bash
+AI_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-your-key
+AI_MODEL_DEFAULT=claude-3-5-haiku-20241022
+AI_MODEL_PREMIUM=claude-3-5-sonnet-20241022
+```
+
+#### 场景 8：使用 Moonshot（Kimi）
+
+```bash
+AI_PROVIDER=openai
+AI_API_KEY=sk-your-moonshot-key
+AI_BASE_URL=https://api.moonshot.cn/v1
+AI_MODEL_DEFAULT=moonshot-v1-8k
+AI_MODEL_PREMIUM=moonshot-v1-32k
+```
+
+#### 场景 9：使用智谱 GLM
+
+```bash
+AI_PROVIDER=openai
+AI_API_KEY=your-zhipu-key
+AI_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+AI_MODEL_DEFAULT=glm-4-flash
+AI_MODEL_PREMIUM=glm-4
+```
+
+#### 场景 10：主备切换（高可用）
+
+```bash
+# 主站
+AI_API_KEY=sk-primary-key
+AI_BASE_URL=https://api.openai.com/v1
+AI_MODEL_DEFAULT=gpt-4o-mini
+
+# 备用中转站（主站故障时自动切换）
+AI_FALLBACK_API_KEY=sk-fallback-key
+AI_FALLBACK_BASE_URL=https://backup-proxy.com/v1
+AI_FALLBACK_MODEL=gpt-4o-mini
+```
+
+### 16.8 自定义模型接入指南
+
+如果你使用的是上述未列出的 API 服务，只要它兼容 OpenAI API 格式（大多数都兼容），只需要：
+
+1. 确认 API 的 `base_url`（如 `https://api.example.com/v1`）
+2. 确认 API Key
+3. 确认模型名称（如 `model-1`、`chat-model` 等）
+4. 在 `.env` 中配置即可
+
+**判断是否兼容 OpenAI 格式**：
+- 如果 API 文档提到使用 `openai` SDK 调用 → 兼容
+- 如果 API 端点是 `/v1/chat/completions` → 兼容
+- 如果请求格式是 `{"model": "...", "messages": [...]}` → 兼容
+
+**不兼容的情况**：
+- 需要继承 `BaseLLMProvider` 实现自定义适配器
+- 参考 `AnthropicProvider` 的实现方式
+
+---
+
+## 17. 云服务器部署手册
+
+### 17.1 部署架构概览
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    云服务器 (推荐配置)                        │
+│                                                             │
+│  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐   │
+│  │   Nginx       │  │  Docker       │  │   域名/SSL    │   │
+│  │  反向代理     │  │  容器编排     │  │   证书管理    │   │
+│  └───────┬───────┘  └───────┬───────┘  └───────────────┘   │
+│          │                  │                               │
+│          ▼                  ▼                               │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │              Docker Compose                         │   │
+│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐  │   │
+│  │  │ FastAPI │ │ Next.js │ │PostgreSQL│ │  Redis  │  │   │
+│  │  │ :8000   │ │ :3000   │ │ :5432   │ │ :6379   │  │   │
+│  │  └─────────┘ └─────────┘ └─────────┘ └─────────┘  │   │
+│  └─────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 17.2 服务器要求
+
+| 项目 | 最低配置 | 推荐配置 |
+|------|---------|---------|
+| CPU | 2 核 | 4 核 |
+| 内存 | 4 GB | 8 GB |
+| 硬盘 | 40 GB SSD | 80 GB SSD |
+| 带宽 | 3 Mbps | 5 Mbps+ |
+| 系统 | Ubuntu 22.04 LTS | Ubuntu 22.04 LTS |
+
+**推荐云服务商**：
+- 国内：阿里云 ECS、腾讯云 CVM、华为云 ECS
+- 海外：AWS EC2、Google Cloud、DigitalOcean、Vultr
+
+### 17.3 完整部署步骤
+
+#### 第一步：服务器初始化
+
+```bash
+# SSH 登录服务器
+ssh root@your-server-ip
+
+# 更新系统
+apt update && apt upgrade -y
+
+# 安装必要工具
+apt install -y curl wget git vim ufw
+
+# 配置防火墙
+ufw allow 22/tcp    # SSH
+ufw allow 80/tcp    # HTTP
+ufw allow 443/tcp   # HTTPS
+ufw enable
+
+# 创建部署用户（推荐，不要用 root 运行应用）
+adduser deploy
+usermod -aG sudo deploy
+su - deploy
+```
+
+#### 第二步：安装 Docker
+
+```bash
+# 安装 Docker
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+
+# 将当前用户加入 docker 组
+sudo usermod -aG docker $USER
+
+# 安装 Docker Compose
+sudo apt install -y docker-compose-plugin
+
+# 验证安装
+docker --version
+docker compose version
+
+# 重新登录以使组权限生效
+exit
+ssh deploy@your-server-ip
+```
+
+#### 第三步：部署应用代码
+
+```bash
+# 创建项目目录
+mkdir -p /home/deploy/ai-rpg
+cd /home/deploy/ai-rpg
+
+# 克隆代码（如果使用 Git）
+git clone https://github.com/your-repo/ai-rpg.git .
+
+# 或者从本地上传
+# scp -r ./project/* deploy@your-server-ip:/home/deploy/ai-rpg/
+```
+
+#### 第四步：配置环境变量
+
+```bash
+# 创建环境配置文件
+cp .env.example .env
+
+# 编辑配置
+vim .env
+```
+
+`.env` 文件内容：
+
+```bash
+# ===== 数据库 =====
+POSTGRES_DB=gamedb
+POSTGRES_USER=gameuser
+POSTGRES_PASSWORD=在此设置一个强密码_例如Xk9#mP2$vL7
+
+# ===== 后端 =====
+DATABASE_URL=postgresql+asyncpg://gameuser:在此设置一个强密码_例如Xk9#mP2$vL7@postgres:5432/gamedb
+REDIS_URL=redis://redis:6379/0
+
+# ===== AI 配置 =====
+# 选择你的 AI 提供商（参考第 16 节）
+AI_PROVIDER=openai
+AI_API_KEY=sk-your-api-key-here
+AI_BASE_URL=https://api.openai.com/v1
+AI_MODEL_DEFAULT=gpt-4o-mini
+AI_MODEL_PREMIUM=gpt-4o
+
+# ===== JWT =====
+JWT_SECRET_KEY=在此生成一个随机密钥_可以用openssl_rand_hex_32生成
+JWT_ALGORITHM=HS256
+JWT_EXPIRE_MINUTES=1440
+
+# ===== 应用 =====
+APP_ENV=production
+APP_DEBUG=false
+APP_PORT=8000
+
+# ===== 前端 =====
+NEXT_PUBLIC_API_URL=http://your-server-ip:8000
+```
+
+**生成安全密钥**：
+
+```bash
+# 生成 JWT 密钥
+openssl rand -hex 32
+
+# 生成数据库密码
+openssl rand -base64 24
+```
+
+#### 第五步：创建生产环境 Docker Compose
+
+创建 `docker-compose.prod.yml`：
+
+```yaml
+version: "3.8"
+
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  # Redis 缓存
+  redis:
+    image: redis:7-alpine
+    restart: always
+    command: redis-server --appendonly yes
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  # 后端 API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: always
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  # Worker 进程（处理延迟任务）
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: always
+    command: python -m workers.action_worker
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  # 前端
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://backend:8000}
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  # Nginx 反向代理
+  nginx:
+    image: nginx:alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - app-network
+
+volumes:
+  pgdata:
+  redisdata:
+
+networks:
+  app-network:
+    driver: bridge
+```
+
+#### 第六步：创建后端 Dockerfile
+
+创建 `backend/Dockerfile`：
+
+```dockerfile
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# 安装系统依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# 安装 Python 依赖
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 复制应用代码
+COPY . .
+
+# 暴露端口
+EXPOSE 8000
+
+# 启动命令
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+```
+
+#### 第七步：创建前端 Dockerfile
+
+创建 `frontend/Dockerfile`：
+
+```dockerfile
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# 安装依赖
+COPY package.json package-lock.json* ./
+RUN npm ci
+
+# 复制源码并构建
+COPY . .
+RUN npm run build
+
+# 生产镜像
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# 复制构建产物
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
+
+EXPOSE 3000
+
+CMD ["node", "server.js"]
+```
+
+**注意**：需要在 `next.config.mjs` 中添加 `output: 'standalone'`：
+
+```javascript
+const nextConfig = {
+  output: "standalone",
+  async rewrites() {
+    return [
+      {
+        source: "/api/:path*",
+        destination: process.env.NEXT_PUBLIC_API_URL + "/api/:path*",
+      },
+    ];
+  },
+};
+
+export default nextConfig;
+```
+
+#### 第八步：配置 Nginx
+
+创建 `nginx/nginx.conf`：
+
+```nginx
+events {
+    worker_connections 1024;
+}
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+
+    # 日志格式
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent"';
+
+    access_log /var/log/nginx/access.log main;
+    error_log  /var/log/nginx/error.log warn;
+
+    # 性能优化
+    sendfile        on;
+    tcp_nopush      on;
+    tcp_nodelay     on;
+    keepalive_timeout 65;
+    types_hash_max_size 2048;
+    client_max_body_size 10M;
+
+    # Gzip 压缩
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml;
+    gzip_min_length 1000;
+
+    # 上游服务
+    upstream backend {
+        server backend:8000;
+    }
+
+    upstream frontend {
+        server frontend:3000;
+    }
+
+    server {
+        listen 80;
+        server_name your-domain.com;  # 替换为你的域名或 IP
+
+        # API 请求转发到后端
+        location /api/ {
+            proxy_pass http://backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            # 超时设置（AI 调用可能较慢）
+            proxy_read_timeout 120s;
+            proxy_connect_timeout 10s;
+        }
+
+        # 其他请求转发到前端
+        location / {
+            proxy_pass http://frontend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # WebSocket 支持（如果后续需要）
+        location /ws/ {
+            proxy_pass http://backend;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+        }
+    }
+}
+```
+
+#### 第九步：构建并启动
+
+```bash
+cd /home/deploy/ai-rpg
+
+# 创建 nginx 目录
+mkdir -p nginx/ssl
+
+# 构建并启动所有服务
+docker compose -f docker-compose.prod.yml up -d --build
+
+# 查看运行状态
+docker compose -f docker-compose.prod.yml ps
+
+# 查看日志
+docker compose -f docker-compose.prod.yml logs -f
+
+# 查看特定服务日志
+docker compose -f docker-compose.prod.yml logs -f backend
+docker compose -f docker-compose.prod.yml logs -f worker
+```
+
+#### 第十步：初始化数据库
+
+```bash
+# 进入后端容器
+docker compose -f docker-compose.prod.yml exec backend bash
+
+# 运行数据库迁移
+alembic upgrade head
+
+# 退出容器
+exit
+```
+
+### 17.4 SSL/HTTPS 配置（推荐）
+
+#### 方案 A：使用 Let's Encrypt（免费）
+
+```bash
+# 安装 Certbot
+sudo apt install -y certbot
+
+# 获取证书（需要域名已解析到服务器 IP）
+sudo certbot certonly --standalone -d your-domain.com
+
+# 证书会保存在 /etc/letsencrypt/live/your-domain.com/
+
+# 复制证书到项目目录
+mkdir -p nginx/ssl
+sudo cp /etc/letsencrypt/live/your-domain.com/fullchain.pem nginx/ssl/
+sudo cp /etc/letsencrypt/live/your-domain.com/privkey.pem nginx/ssl/
+sudo chown -R deploy:deploy nginx/ssl/
+```
+
+更新 `nginx/nginx.conf` 添加 HTTPS：
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name your-domain.com;
+
+    ssl_certificate     /etc/nginx/ssl/fullchain.pem;
+    ssl_certificate_key /etc/nginx/ssl/privkey.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    # ... 其他配置同上 ...
+}
+```
+
+#### 方案 B：使用云服务商 SSL 证书
+
+大多数云服务商提供免费 SSL 证书：
+- 阿里云：SSL 证书服务 → 免费证书
+- 腾讯云：SSL 证书 → 免费证书
+- Cloudflare：自动 SSL
+
+下载证书后放到 `nginx/ssl/` 目录即可。
+
+### 17.5 域名配置
+
+1. 购买域名（阿里云万网、腾讯云 DNSPod、Namecheap 等）
+2. 添加 DNS 解析记录：
+   ```
+   类型: A
+   主机记录: @
+   记录值: your-server-ip
+   TTL: 600
+   ```
+3. 等待 DNS 生效（通常 5 分钟 ~ 24 小时）
+4. 更新 `.env` 中的 `NEXT_PUBLIC_API_URL` 为 `https://your-domain.com`
+
+### 17.6 自动化部署脚本
+
+创建 `deploy.sh`：
+
+```bash
+#!/bin/bash
+set -e
+
+echo "=== AI 叙事跑团 - 部署脚本 ==="
+
+# 颜色定义
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+# 检查 Docker
+if ! command -v docker &> /dev/null; then
+    echo -e "${YELLOW}Docker 未安装，开始安装...${NC}"
+    curl -fsSL https://get.docker.com -o get-docker.sh
+    sudo sh get-docker.sh
+    sudo usermod -aG docker $USER
+    echo -e "${GREEN}Docker 安装完成${NC}"
+fi
+
+# 检查 Docker Compose
+if ! docker compose version &> /dev/null; then
+    echo -e "${YELLOW}Docker Compose 未安装，开始安装...${NC}"
+    sudo apt install -y docker-compose-plugin
+    echo -e "${GREEN}Docker Compose 安装完成${NC}"
+fi
+
+# 检查 .env 文件
+if [ ! -f .env ]; then
+    echo -e "${YELLOW}.env 文件不存在，从模板创建...${NC}"
+    cp .env.example .env
+    echo -e "${YELLOW}请编辑 .env 文件配置你的密钥和数据库密码${NC}"
+    echo -e "${YELLOW}配置完成后重新运行此脚本${NC}"
+    exit 1
+fi
+
+# 构建并启动
+echo -e "${GREEN}构建并启动服务...${NC}"
+docker compose -f docker-compose.prod.yml up -d --build
+
+# 等待服务启动
+echo -e "${GREEN}等待服务启动...${NC}"
+sleep 10
+
+# 检查服务状态
+echo -e "${GREEN}检查服务状态...${NC}"
+docker compose -f docker-compose.prod.yml ps
+
+# 初始化数据库
+echo -e "${GREEN}初始化数据库...${NC}"
+docker compose -f docker-compose.prod.yml exec -T backend alembic upgrade head
+
+echo ""
+echo -e "${GREEN}=== 部署完成 ===${NC}"
+echo -e "前端地址: http://$(hostname -I | awk '{print $1}')"
+echo -e "API 地址: http://$(hostname -I | awk '{print $1}'):8000"
+echo ""
+echo -e "${YELLOW}常用命令：${NC}"
+echo "  查看日志: docker compose -f docker-compose.prod.yml logs -f"
+echo "  重启服务: docker compose -f docker-compose.prod.yml restart"
+echo "  停止服务: docker compose -f docker-compose.prod.yml down"
+echo "  更新部署: git pull && docker compose -f docker-compose.prod.yml up -d --build"
+```
+
+使用方式：
+
+```bash
+chmod +x deploy.sh
+./deploy.sh
+```
+
+### 17.7 日常运维命令
+
+```bash
+# ===== 服务管理 =====
+# 启动服务
+docker compose -f docker-compose.prod.yml up -d
+
+# 停止服务
+docker compose -f docker-compose.prod.yml down
+
+# 重启单个服务
+docker compose -f docker-compose.prod.yml restart backend
+
+# 查看服务状态
+docker compose -f docker-compose.prod.yml ps
+
+# ===== 日志查看 =====
+# 查看所有日志
+docker compose -f docker-compose.prod.yml logs -f
+
+# 查看后端日志（最近 100 行）
+docker compose -f docker-compose.prod.yml logs --tail 100 backend
+
+# 查看 Worker 日志
+docker compose -f docker-compose.prod.yml logs -f worker
+
+# ===== 数据库管理 =====
+# 进入数据库
+docker compose -f docker-compose.prod.yml exec postgres psql -U gameuser -d gamedb
+
+# 备份数据库
+docker compose -f docker-compose.prod.yml exec postgres pg_dump -U gameuser gamedb > backup_$(date +%Y%m%d).sql
+
+# 恢复数据库
+docker compose -f docker-compose.prod.yml exec -T postgres psql -U gameuser gamedb < backup_20260429.sql
+
+# ===== 更新部署 =====
+# 拉取最新代码
+git pull
+
+# 重新构建并启动
+docker compose -f docker-compose.prod.yml up -d --build
+
+# 运行数据库迁移
+docker compose -f docker-compose.prod.yml exec backend alembic upgrade head
+
+# ===== 资源监控 =====
+# 查看容器资源使用
+docker stats
+
+# 查看磁盘使用
+df -h
+
+# 清理未使用的 Docker 资源
+docker system prune -a
+```
+
+### 17.8 常见问题排查
+
+#### 问题 1：服务无法启动
+
+```bash
+# 查看详细错误日志
+docker compose -f docker-compose.prod.yml logs backend
+
+# 常见原因：
+# 1. 端口被占用 → 修改 docker-compose 中的端口映射
+# 2. 环境变量错误 → 检查 .env 文件
+# 3. 数据库连接失败 → 确认 PostgreSQL 已启动
+```
+
+#### 问题 2：AI 调用失败
+
+```bash
+# 检查 API Key 配置
+docker compose -f docker-compose.prod.yml exec backend env | grep AI_
+
+# 测试网络连通性
+docker compose -f docker-compose.prod.yml exec backend curl -I https://api.openai.com
+
+# 常见原因：
+# 1. API Key 无效 → 重新配置
+# 2. 网络不通 → 检查防火墙/代理
+# 3. 余额不足 → 充值或切换提供者
+```
+
+#### 问题 3：数据库连接失败
+
+```bash
+# 检查数据库是否运行
+docker compose -f docker-compose.prod.yml ps postgres
+
+# 检查数据库日志
+docker compose -f docker-compose.prod.yml logs postgres
+
+# 手动测试连接
+docker compose -f docker-compose.prod.yml exec postgres psql -U gameuser -d gamedb
+```
+
+#### 问题 4：前端无法访问后端 API
+
+```bash
+# 检查 Nginx 配置
+docker compose -f docker-compose.prod.yml exec nginx nginx -t
+
+# 检查 Nginx 日志
+docker compose -f docker-compose.prod.yml logs nginx
+
+# 检查后端是否正常
+curl http://localhost:8000/health
+```
+
+#### 问题 5：磁盘空间不足
+
+```bash
+# 查看磁盘使用
+df -h
+
+# 清理 Docker 未使用资源
+docker system prune -a
+
+# 清理旧日志
+sudo journalctl --vacuum-time=7d
+
+# 清理数据库旧数据（进入 psql 后）
+DELETE FROM events WHERE created_at < NOW() - INTERVAL '30 days';
+DELETE FROM ai_sessions WHERE created_at < NOW() - INTERVAL '30 days';
+```
+
+### 17.9 备份策略
+
+```bash
+# 创建自动备份脚本
+cat > /home/deploy/backup.sh << 'EOF'
+#!/bin/bash
+BACKUP_DIR="/home/deploy/backups"
+DATE=$(date +%Y%m%d_%H%M%S)
+mkdir -p $BACKUP_DIR
+
+# 备份数据库
+docker compose -f /home/deploy/ai-rpg/docker-compose.prod.yml \
+  exec -T postgres pg_dump -U gameuser gamedb | gzip > $BACKUP_DIR/db_$DATE.sql.gz
+
+# 备份环境配置
+cp /home/deploy/ai-rpg/.env $BACKUP_DIR/env_$DATE.bak
+
+# 保留最近 30 天的备份
+find $BACKUP_DIR -name "*.sql.gz" -mtime +30 -delete
+find $BACKUP_DIR -name "*.bak" -mtime +30 -delete
+
+echo "Backup completed: $BACKUP_DIR/db_$DATE.sql.gz"
+EOF
+
+chmod +x /home/deploy/backup.sh
+
+# 添加定时任务（每天凌晨 3 点备份）
+(crontab -l 2>/dev/null; echo "0 3 * * * /home/deploy/backup.sh >> /home/deploy/backup.log 2>&1") | crontab -
+```
+
+### 17.10 性能优化建议
+
+| 优化项 | 操作 | 效果 |
+|--------|------|------|
+| 数据库索引 | 确保常用查询字段有索引 | 查询速度提升 10-100x |
+| Redis 缓存 | 缓存游戏状态、角色信息 | 减少数据库压力 |
+| Nginx Gzip | 启用压缩 | 传输体积减少 60-80% |
+| 连接池 | 调整 PostgreSQL 连接池大小 | 并发能力提升 |
+| Worker 数量 | 根据 CPU 核心数调整 uvicorn workers | 吞吐量提升 |
+| CDN | 使用 CDN 加速静态资源 | 首屏加载提速 |
+
+---
+
+## 附录 A：环境变量清单
+
+### Phase 1：核心功能（4 周）
+
+- [ ] 用户注册/登录（邮箱）
+- [ ] 创建游戏（上传文本、AI 解析）
+- [ ] 加入游戏（选择角色）
+- [ ] 提交行动、等待、查看结果
+- [ ] 基础推送通知
+- [ ] 游戏结束与总结
+
+### Phase 2：社交增强（2 周）
+
+- [ ] 救援机制
+- [ ] 角色面板
+- [ ] 事件时间线回看
+- [ ] 邀请系统优化
+
+### Phase 3：体验优化（2 周）
+
+- [ ] AI 叙事质量调优
+- [ ] 等待时间平衡性调整
+- [ ] 推送通知策略优化
+- [ ] 性能优化与 bug 修复
+
+### Phase 4：扩展功能（持续迭代）
+
+- [ ] OAuth 登录（Google/Apple）
+- [ ] Web 版本
+- [ ] 故事导出（生成小说）
+- [ ] 公共房间大厅
+- [ ] 成就系统
+- [ ] AI 主持人风格切换
+
+---
+
+## 附录 A：环境变量清单
+
+```bash
+# .env
+
+# ===== 数据库 =====
+DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/gamedb
+POSTGRES_DB=gamedb
+POSTGRES_USER=user
+POSTGRES_PASSWORD=password
+
+# ===== Redis =====
+REDIS_URL=redis://localhost:6379/0
+
+# ===== AI 配置（统一接口） =====
+# 提供商类型：openai / anthropic / local / custom
+AI_PROVIDER=openai
+
+# API 密钥和地址
+AI_API_KEY=sk-your-api-key
+AI_BASE_URL=https://api.openai.com/v1
+
+# 模型选择
+AI_MODEL_DEFAULT=gpt-4o-mini       # 评估、压缩等低成本任务
+AI_MODEL_PREMIUM=gpt-4o            # 叙事生成等高质量任务
+
+# Claude 配置（可选，仅 AI_PROVIDER=anthropic 时需要）
+ANTHROPIC_API_KEY=sk-ant-your-key
+
+# 备用 API（可选，用于故障转移）
+AI_FALLBACK_API_KEY=
+AI_FALLBACK_BASE_URL=
+AI_FALLBACK_MODEL=
+
+# ===== JWT =====
+JWT_SECRET_KEY=your-secret-key-here
+JWT_ALGORITHM=HS256
+JWT_EXPIRE_MINUTES=1440  # 24 hours
+
+# ===== Firebase（可选） =====
+FIREBASE_CREDENTIALS_PATH=./firebase.json
+
+# ===== Sentry（可选） =====
+SENTRY_DSN=https://...@sentry.io/...
+
+# ===== 应用 =====
+APP_ENV=development
+APP_DEBUG=true
+APP_PORT=8000
+
+# ===== 前端 =====
+NEXT_PUBLIC_API_URL=http://localhost:8000
+
+# ===== 速率限制 =====
+RATE_LIMIT_PER_MINUTE=60
+```
+
+## 附录 B：项目目录结构
+
+```
+project-root/
+├── backend/
+│   ├── app/
+│   │   ├── __init__.py
+│   │   ├── main.py                 # FastAPI 应用入口
+│   │   ├── config.py               # 配置管理
+│   │   ├── dependencies.py         # 依赖注入
+│   │   ├── middleware/
+│   │   │   ├── auth.py             # JWT 认证中间件
+│   │   │   ├── rate_limit.py       # 速率限制
+│   │   │   └── cors.py             # CORS 配置
+│   │   ├── routers/
+│   │   │   ├── auth.py
+│   │   │   ├── games.py
+│   │   │   ├── characters.py
+│   │   │   └── actions.py
+│   │   ├── services/
+│   │   │   ├── game_service.py     # 游戏核心逻辑
+│   │   │   ├── ai_service.py       # AI 调用封装
+│   │   │   ├── auth_service.py     # 认证逻辑
+│   │   │   └── notification_service.py
+│   │   ├── models/
+│   │   │   ├── user.py
+│   │   │   ├── game.py
+│   │   │   ├── character.py
+│   │   │   ├── action.py
+│   │   │   └── event.py
+│   │   ├── schemas/
+│   │   │   ├── auth.py
+│   │   │   ├── game.py
+│   │   │   └── action.py
+│   │   └── utils/
+│   │       ├── content_filter.py
+│   │       └── helpers.py
+│   ├── workers/
+│   │   ├── action_worker.py        # BullMQ Worker
+│   │   └── cleanup_worker.py       # 定期清理
+│   ├── alembic/                    # 数据库迁移
+│   ├── tests/
+│   │   ├── test_api/
+│   │   ├── test_services/
+│   │   └── conftest.py
+│   ├── Dockerfile
+│   └── requirements.txt
+├── mobile/
+│   ├── lib/
+│   │   ├── main.dart
+│   │   ├── screens/
+│   │   ├── widgets/
+│   │   ├── providers/
+│   │   ├── services/
+│   │   └── models/
+│   └── pubspec.yaml
+├── docker-compose.yml
+├── .env.example
+└── README.md
+```

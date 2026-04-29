@@ -55,108 +55,115 @@ export function CharacterPanel({
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {characters.map((char) => {
-          const pending = getCharacterPendingAction(char.id);
-          const isMe = char.id === myCharacter?.id;
-          const health = char.status_effects?.health ?? 100;
-          const items = char.status_effects?.items || [];
+        {characters
+          .filter((c) => c.player_id)
+          .sort((a, b) => {
+            if (a.id === myCharacter?.id) return -1;
+            if (b.id === myCharacter?.id) return 1;
+            return 0;
+          })
+          .map((char) => {
+            const pending = getCharacterPendingAction(char.id);
+            const isMe = char.id === myCharacter?.id;
+            const health = char.status_effects?.health ?? 100;
+            const items = char.status_effects?.items || [];
 
-          return (
-            <div
-              key={char.id}
-              className={`rounded-xl p-4 border ${
-                isMe
-                  ? "border-fantasy-accent/30 bg-fantasy-accent/5"
-                  : "border-fantasy-accent/10"
-              }`}
-            >
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <div className="font-semibold text-fantasy-text">
-                    {char.name}
-                    {isMe && (
-                      <span className="text-xs text-fantasy-accent ml-2">你</span>
+            return (
+              <div
+                key={char.id}
+                className={`rounded-xl p-4 border ${
+                  isMe
+                    ? "border-fantasy-accent/30 bg-fantasy-accent/5"
+                    : "border-fantasy-accent/10"
+                }`}
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <div className="font-semibold text-fantasy-text">
+                      {char.name}
+                      {isMe && (
+                        <span className="text-xs text-fantasy-accent ml-2">你</span>
+                      )}
+                    </div>
+                    {char.description && (
+                      <div className="text-xs text-fantasy-muted mt-1">
+                        {char.description}
+                      </div>
                     )}
                   </div>
-                  {char.description && (
-                    <div className="text-xs text-fantasy-muted mt-1">
-                      {char.description}
-                    </div>
-                  )}
-                </div>
-                <span
-                  className={`text-xs px-2 py-1 rounded-full ${
-                    char.is_alive
-                      ? "bg-green-500/20 text-green-400"
-                      : "bg-red-500/20 text-red-400"
-                  }`}
-                >
-                  {char.is_alive ? "存活" : "倒下"}
-                </span>
-              </div>
-
-              {/* Health bar */}
-              <div className="mb-2">
-                <div className="flex justify-between text-xs text-fantasy-muted mb-1">
-                  <span>❤️ 生命值</span>
-                  <span>{health}/100</span>
-                </div>
-                <div className="w-full bg-fantasy-bg/50 rounded-full h-2">
-                  <div
-                    className={`h-2 rounded-full transition-all ${
-                      health > 60
-                        ? "bg-green-500"
-                        : health > 30
-                        ? "bg-yellow-500"
-                        : "bg-red-500"
+                  <span
+                    className={`text-xs px-2 py-1 rounded-full ${
+                      char.is_alive
+                        ? "bg-green-500/20 text-green-400"
+                        : "bg-red-500/20 text-red-400"
                     }`}
-                    style={{ width: `${health}%` }}
-                  />
+                  >
+                    {char.is_alive ? "存活" : "倒下"}
+                  </span>
                 </div>
-              </div>
 
-              {/* Location */}
-              {char.location && (
-                <div className="text-xs text-fantasy-muted mb-2">
-                  ️ {char.location}
+                {/* Health bar */}
+                <div className="mb-2">
+                  <div className="flex justify-between text-xs text-fantasy-muted mb-1">
+                    <span>❤️ 生命值</span>
+                    <span>{health}/100</span>
+                  </div>
+                  <div className="w-full bg-fantasy-bg/50 rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full transition-all ${
+                        health > 60
+                          ? "bg-green-500"
+                          : health > 30
+                          ? "bg-yellow-500"
+                          : "bg-red-500"
+                      }`}
+                      style={{ width: `${health}%` }}
+                    />
+                  </div>
                 </div>
-              )}
 
-              {/* Items */}
-              {items.length > 0 && (
-                <div className="text-xs text-fantasy-muted mb-2">
-                   {items.join("、")}
-                </div>
-              )}
+                {/* Location */}
+                {char.location && (
+                  <div className="text-xs text-fantasy-muted mb-2">
+                    ️ {char.location}
+                  </div>
+                )}
 
-              {/* Pending action */}
-              {pending && (
-                <div className="bg-fantasy-bg/30 rounded-lg p-2 mt-2">
-                  <div className="text-xs text-fantasy-accent mb-1">⏳ 行动中</div>
-                  <div className="text-xs text-fantasy-text">{pending.public_snippet}</div>
-                  {pending.remaining_seconds !== undefined && pending.remaining_seconds > 0 && (
-                    <div className="mt-1">
-                      <div className="w-full bg-fantasy-bg/50 rounded-full h-1.5 progress-shimmer" />
-                      <div className="text-xs text-fantasy-muted mt-1">
-                        剩余 {Math.ceil(pending.remaining_seconds)} 秒
+                {/* Items */}
+                {items.length > 0 && (
+                  <div className="text-xs text-fantasy-muted mb-2">
+                     {items.join("、")}
+                  </div>
+                )}
+
+                {/* Pending action */}
+                {pending && (
+                  <div className="bg-fantasy-bg/30 rounded-lg p-2 mt-2">
+                    <div className="text-xs text-fantasy-accent mb-1">⏳ 行动中</div>
+                    <div className="text-xs text-fantasy-text">{pending.public_snippet}</div>
+                    {pending.remaining_seconds !== undefined && pending.remaining_seconds > 0 && (
+                      <div className="mt-1">
+                        <div className="w-full bg-fantasy-bg/50 rounded-full h-1.5 progress-shimmer" />
+                        <div className="text-xs text-fantasy-muted mt-1">
+                          剩余 {Math.ceil(pending.remaining_seconds)} 秒
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
+                    )}
+                  </div>
+                )}
 
-              {/* Cooperation button */}
-              {!isMe && pending && !myCharacter?.status_effects?.injuries?.length && (
-                <button
-                  onClick={() => setCooperationTarget(pending.id)}
-                  className="mt-2 w-full bg-fantasy-accent/10 hover:bg-fantasy-accent/20 text-fantasy-accent text-xs py-2 rounded-lg transition-colors"
-                >
-                   协作
-                </button>
-              )}
-            </div>
-          );
-        })}
+                {/* Cooperation button */}
+                {!isMe && pending && !myCharacter?.status_effects?.injuries?.length && (
+                  <button
+                    onClick={() => setCooperationTarget(pending.id)}
+                    className="mt-2 w-full bg-fantasy-accent/10 hover:bg-fantasy-accent/20 text-fantasy-accent text-xs py-2 rounded-lg transition-colors"
+                  >
+                     协作
+                  </button>
+                )}
+              </div>
+            );
+          })}
       </div>
 
       {/* Cooperation modal */}

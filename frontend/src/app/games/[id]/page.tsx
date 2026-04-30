@@ -443,7 +443,7 @@ export default function GameRoomPage() {
               </span>
             </div>
             <div className="text-[10px] sm:text-xs text-fantasy-muted/60">
-              第 {game.current_chapter} 章 · {characters.filter((c) => c.is_alive).length} 名冒险者存活
+              第 {game.current_chapter} 章 · {characters.filter((c) => c.player_id && c.is_alive).length} 名冒险者存活
             </div>
           </div>
           <div className="shrink-0 flex items-center gap-1.5 sm:gap-2 ml-2">

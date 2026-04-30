@@ -241,18 +241,19 @@ class GameService:
             )
             self.db.add(character)
 
-        # Add join event
-        event = Event(
-            id=str(uuid.uuid4()),
-            game_id=game_id,
-            type=EventType.PLAYER_JOIN,
-            data={
-                "user_id": user_id,
-                "character_id": character.id,
-                "character_name": character.name,
-            },
-        )
-        self.db.add(event)
+        # Only emit join event on first-time join, not character switches
+        if not existing:
+            event = Event(
+                id=str(uuid.uuid4()),
+                game_id=game_id,
+                type=EventType.PLAYER_JOIN,
+                data={
+                    "user_id": user_id,
+                    "character_id": character.id,
+                    "character_name": character.name,
+                },
+            )
+            self.db.add(event)
         await self.db.commit()
         await self.db.refresh(character)
         return character

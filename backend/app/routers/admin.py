@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
 
-from app.config import get_current_admin_settings, update_admin_settings, get_settings
+from app.config import get_current_admin_settings, update_admin_settings, get_settings, get_default_prompts
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
@@ -69,6 +69,12 @@ class AdminSettingsUpdate(BaseModel):
     MAX_TOKENS_DEFAULT: int | None = None
     AI_THINKING_ENABLED: bool | None = None
     AI_THINKING_EFFORT: str | None = None
+    # Prompt overrides
+    PROMPT_PARSE_STORY: str | None = None
+    PROMPT_EVALUATE_ACTION: str | None = None
+    PROMPT_GENERATE_NARRATIVE: str | None = None
+    PROMPT_EVALUATE_COOPERATION: str | None = None
+    PROMPT_COMPRESS_MEMORY: str | None = None
 
 
 # --- Dependency ---
@@ -94,6 +100,12 @@ async def admin_verify(data: AdminVerifyRequest):
 async def get_settings_endpoint(_: None = None):
     """Get current admin-configurable settings. No auth required for reading."""
     return get_current_admin_settings()
+
+
+@router.get("/prompts/defaults")
+async def get_default_prompts_endpoint():
+    """Get default prompt texts. No auth required."""
+    return get_default_prompts()
 
 
 @router.put("/settings")

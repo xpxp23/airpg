@@ -144,4 +144,10 @@ export interface AdminSettings {
   MAX_TOKENS_DEFAULT: number;
   AI_THINKING_ENABLED: boolean;
   AI_THINKING_EFFORT: string;
+  // Prompt overrides (optional, empty string or missing = use default)
+  PROMPT_PARSE_STORY?: string;
+  PROMPT_EVALUATE_ACTION?: string;
+  PROMPT_GENERATE_NARRATIVE?: string;
+  PROMPT_EVALUATE_COOPERATION?: string;
+  PROMPT_COMPRESS_MEMORY?: string;
 }

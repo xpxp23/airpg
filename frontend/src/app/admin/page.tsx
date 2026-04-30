@@ -4,6 +4,34 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { AdminSettings } from "@/types";
 
+const PROMPT_FIELDS = [
+  {
+    key: "PROMPT_PARSE_STORY" as const,
+    label: "故事解析",
+    desc: "AI 解析玩家上传的故事文本时使用的提示词",
+  },
+  {
+    key: "PROMPT_EVALUATE_ACTION" as const,
+    label: "行动评估",
+    desc: "AI 评估玩家行动的等待时间、难度和风险时使用的提示词",
+  },
+  {
+    key: "PROMPT_GENERATE_NARRATIVE" as const,
+    label: "叙事生成",
+    desc: "AI 生成行动结果叙事时使用的核心提示词（最重要）",
+  },
+  {
+    key: "PROMPT_EVALUATE_COOPERATION" as const,
+    label: "协作评估",
+    desc: "AI 评估玩家间协作时使用的提示词",
+  },
+  {
+    key: "PROMPT_COMPRESS_MEMORY" as const,
+    label: "记忆压缩",
+    desc: "AI 将游戏事件压缩为记忆摘要时使用的提示词",
+  },
+];
+
 export default function AdminPage() {
   const [adminToken, setAdminToken] = useState<string | null>(null);
   const [password, setPassword] = useState("");
@@ -16,6 +44,10 @@ export default function AdminPage() {
   const [success, setSuccess] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
 
+  // Prompt defaults
+  const [defaultPrompts, setDefaultPrompts] = useState<Record<string, string>>({});
+  const [expandedPrompt, setExpandedPrompt] = useState<string | null>(null);
+
   useEffect(() => {
     const stored = sessionStorage.getItem("admin_token");
     if (stored) {
@@ -26,6 +58,7 @@ export default function AdminPage() {
   useEffect(() => {
     if (adminToken) {
       loadSettings();
+      loadDefaults();
     }
   }, [adminToken]);
 
@@ -38,6 +71,15 @@ export default function AdminPage() {
       if (err.message?.includes("401") || err.message?.includes("expired")) {
         handleLogout();
       }
+    }
+  }
+
+  async function loadDefaults() {
+    try {
+      const data = await api.getAdminDefaultPrompts();
+      setDefaultPrompts(data);
+    } catch {
+      // defaults not critical
     }
   }
 
@@ -88,6 +130,11 @@ export default function AdminPage() {
   function updateField(key: keyof AdminSettings, value: string | number | boolean) {
     if (!settings) return;
     setSettings({ ...settings, [key]: value });
+  }
+
+  function resetPrompt(key: string) {
+    if (!settings || !defaultPrompts[key]) return;
+    setSettings({ ...settings, [key]: defaultPrompts[key] });
   }
 
   // Password gate
@@ -173,6 +220,7 @@ export default function AdminPage() {
       )}
 
       <form onSubmit={handleSave} className="space-y-6">
+        {/* API Configuration */}
         <div className="bg-fantasy-card/80 backdrop-blur-sm rounded-2xl p-6 border border-fantasy-accent/10 space-y-5">
           <h2 className="text-lg font-semibold text-fantasy-text border-b border-fantasy-accent/10 pb-3">
             API 配置
@@ -230,6 +278,7 @@ export default function AdminPage() {
           </div>
         </div>
 
+        {/* Model Configuration */}
         <div className="bg-fantasy-card/80 backdrop-blur-sm rounded-2xl p-6 border border-fantasy-accent/10 space-y-5">
           <h2 className="text-lg font-semibold text-fantasy-text border-b border-fantasy-accent/10 pb-3">
             模型配置
@@ -264,6 +313,7 @@ export default function AdminPage() {
           </div>
         </div>
 
+        {/* Token Limits */}
         <div className="bg-fantasy-card/80 backdrop-blur-sm rounded-2xl p-6 border border-fantasy-accent/10 space-y-5">
           <h2 className="text-lg font-semibold text-fantasy-text border-b border-fantasy-accent/10 pb-3">
             Token 限制
@@ -298,6 +348,7 @@ export default function AdminPage() {
           </div>
         </div>
 
+        {/* Thinking Mode */}
         <div className="bg-fantasy-card/80 backdrop-blur-sm rounded-2xl p-6 border border-fantasy-accent/10 space-y-5">
           <h2 className="text-lg font-semibold text-fantasy-text border-b border-fantasy-accent/10 pb-3">
             思考模式
@@ -349,6 +400,83 @@ export default function AdminPage() {
               <p className="text-xs text-fantasy-muted mt-2">高 = 平衡质量与速度；最大 = 最强推理能力，适合复杂剧情</p>
             </div>
           )}
+        </div>
+
+        {/* Prompt Configuration */}
+        <div className="bg-fantasy-card/80 backdrop-blur-sm rounded-2xl p-6 border border-fantasy-accent/10 space-y-4">
+          <h2 className="text-lg font-semibold text-fantasy-text border-b border-fantasy-accent/10 pb-3">
+            提示词配置
+          </h2>
+          <p className="text-xs text-fantasy-muted/60">
+            自定义 AI 主持人的行为提示词。修改后需保存生效。留空表示使用默认值。
+          </p>
+
+          {PROMPT_FIELDS.map(({ key, label, desc }) => {
+            const isExpanded = expandedPrompt === key;
+            const currentValue = (settings as any)[key] || "";
+            const defaultValue = defaultPrompts[key] || "";
+            const isModified = currentValue && currentValue !== defaultValue;
+
+            return (
+              <div
+                key={key}
+                className="bg-fantasy-bg/30 rounded-xl border border-fantasy-accent/5 overflow-hidden"
+              >
+                <button
+                  type="button"
+                  onClick={() => setExpandedPrompt(isExpanded ? null : key)}
+                  className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-fantasy-accent/5 transition-colors"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-fantasy-accent text-sm">
+                      {isExpanded ? "▼" : "▶"}
+                    </span>
+                    <div className="min-w-0">
+                      <span className="text-sm font-medium text-fantasy-text">{label}</span>
+                      {isModified && (
+                        <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-fantasy-accent/20 text-fantasy-accent">
+                          已修改
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+
+                {isExpanded && (
+                  <div className="px-4 pb-4 space-y-3">
+                    <p className="text-xs text-fantasy-muted/60">{desc}</p>
+
+                    <textarea
+                      value={currentValue}
+                      onChange={(e) => updateField(key as keyof AdminSettings, e.target.value)}
+                      className="w-full bg-fantasy-bg/50 border border-fantasy-accent/20 rounded-lg px-4 py-3 text-sm text-fantasy-text placeholder-fantasy-muted/50 focus:outline-none focus:border-fantasy-accent/50 transition-colors font-mono resize-y"
+                      rows={12}
+                      placeholder={defaultValue}
+                    />
+
+                    <div className="flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={() => resetPrompt(key)}
+                        className="text-xs text-fantasy-muted hover:text-fantasy-accent transition-colors"
+                      >
+                        恢复默认
+                      </button>
+                      {currentValue ? (
+                        <span className="text-[10px] text-fantasy-muted/40">
+                          {currentValue.length} 字
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-fantasy-muted/40">
+                          使用默认值
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         <button

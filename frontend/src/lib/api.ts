@@ -204,6 +204,10 @@ class ApiClient {
       headers: { "X-Admin-Token": adminToken },
     });
   }
+
+  async getAdminDefaultPrompts(): Promise<Record<string, string>> {
+    return this.request("/admin/prompts/defaults");
+  }
 }
 
 export const api = new ApiClient();

@@ -123,15 +123,17 @@ def update_admin_settings(updates: dict) -> dict:
 
 def get_current_admin_settings() -> dict:
     """Get current effective values for admin-overridable fields."""
+    from app.services.ai_service import get_default_prompts
     settings = get_settings()
     overrides = load_admin_overrides()
+    defaults = get_default_prompts()
     result = {}
     for key in ADMIN_FIELDS:
         if key in ADMIN_SETTINGS_FIELDS:
             result[key] = getattr(settings, key)
         else:
-            # Prompt fields: return override or empty string
-            result[key] = overrides.get(key, "")
+            # Prompt fields: return override or default value
+            result[key] = overrides.get(key, defaults.get(key, ""))
     return result
 
 

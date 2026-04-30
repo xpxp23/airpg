@@ -9,6 +9,7 @@ interface CharacterPanelProps {
   myCharacter: Character | null;
   onClose: () => void;
   onCooperation: (targetActionId: string, text: string) => Promise<any>;
+  gameMode?: "waiting" | "instant";
 }
 
 export function CharacterPanel({
@@ -17,6 +18,7 @@ export function CharacterPanel({
   myCharacter,
   onClose,
   onCooperation,
+  gameMode,
 }: CharacterPanelProps) {
   const [cooperationTarget, setCooperationTarget] = useState<string | null>(null);
   const [cooperationText, setCooperationText] = useState("");
@@ -157,9 +159,11 @@ export function CharacterPanel({
                   {/* Pending action */}
                   {pending && (
                     <div className="bg-fantasy-bg/30 rounded-lg p-2 mt-2">
-                      <div className="text-xs text-fantasy-accent mb-1">⏳ 行动中</div>
+                      <div className="text-xs text-fantasy-accent mb-1">
+                        {gameMode === "instant" ? "⚡ 处理中" : "⏳ 行动中"}
+                      </div>
                       <div className="text-xs text-fantasy-text">{pending.public_snippet}</div>
-                      {pending.remaining_seconds !== undefined && pending.remaining_seconds > 0 && (
+                      {gameMode !== "instant" && pending.remaining_seconds !== undefined && pending.remaining_seconds > 0 && (
                         <div className="mt-1">
                           <div className="w-full bg-fantasy-bg/50 rounded-full h-1.5 progress-shimmer" />
                           <div className="text-xs text-fantasy-muted mt-1">

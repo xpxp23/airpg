@@ -12,7 +12,7 @@ export default function NewGamePage() {
   const [title, setTitle] = useState("");
   const [durationHint, setDurationHint] = useState("8小时");
   const [maxPlayers, setMaxPlayers] = useState(4);
-  const [isPublic, setIsPublic] = useState(false);
+  const [gameMode, setGameMode] = useState<"waiting" | "instant">("waiting");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -30,7 +30,8 @@ export default function NewGamePage() {
         title: title || undefined,
         duration_hint: durationHint,
         max_players: maxPlayers,
-        is_public: isPublic,
+        is_public: true,
+        game_mode: gameMode,
       });
       router.push(`/games/${game.id}`);
     } catch (err: any) {
@@ -90,7 +91,7 @@ export default function NewGamePage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
           <div>
             <label className="block text-sm font-medium text-fantasy-muted mb-2">
               目标时长
@@ -127,36 +128,41 @@ export default function NewGamePage() {
               <option value="8">8 人</option>
             </select>
           </div>
+        </div>
 
-          <div>
-            <label className="block text-sm font-medium text-fantasy-muted mb-2">
-              房间类型
-            </label>
-            <div className="flex items-center h-[52px] space-x-4">
-              <button
-                type="button"
-                onClick={() => setIsPublic(false)}
-                className={`flex-1 py-3 rounded-lg text-sm transition-colors ${
-                  !isPublic
-                    ? "bg-fantasy-accent text-white"
-                    : "bg-fantasy-card text-fantasy-muted hover:text-fantasy-text"
-                }`}
-              >
-                私密
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsPublic(true)}
-                className={`flex-1 py-3 rounded-lg text-sm transition-colors ${
-                  isPublic
-                    ? "bg-fantasy-accent text-white"
-                    : "bg-fantasy-card text-fantasy-muted hover:text-fantasy-text"
-                }`}
-              >
-                公开
-              </button>
-            </div>
+        <div>
+          <label className="block text-sm font-medium text-fantasy-muted mb-2">
+            游戏模式
+          </label>
+          <div className="flex items-center h-[52px] space-x-4">
+            <button
+              type="button"
+              onClick={() => setGameMode("waiting")}
+              className={`flex-1 py-3 rounded-lg text-sm transition-colors ${
+                gameMode === "waiting"
+                  ? "bg-fantasy-accent text-white"
+                  : "bg-fantasy-card text-fantasy-muted hover:text-fantasy-text"
+              }`}
+            >
+              ⏳ 等待模式
+            </button>
+            <button
+              type="button"
+              onClick={() => setGameMode("instant")}
+              className={`flex-1 py-3 rounded-lg text-sm transition-colors ${
+                gameMode === "instant"
+                  ? "bg-fantasy-accent text-white"
+                  : "bg-fantasy-card text-fantasy-muted hover:text-fantasy-text"
+              }`}
+            >
+              ⚡ 即玩模式
+            </button>
           </div>
+          <p className="text-xs text-fantasy-muted/60 mt-1">
+            {gameMode === "waiting"
+              ? "行动需要等待时间，AI 会根据行动复杂度自动评估"
+              : "行动立即完成，无需等待，适合快速体验剧情"}
+          </p>
         </div>
 
         <div className="bg-fantasy-card/30 rounded-xl p-4 sm:p-6 border border-fantasy-accent/10">

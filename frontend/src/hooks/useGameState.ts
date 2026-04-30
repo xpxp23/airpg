@@ -105,7 +105,8 @@ export function useGameState(gameId: string, userId?: string) {
       setState((prev) => ({
         ...prev,
         actions: [...prev.actions, action],
-        pendingAction: action,
+        // In instant mode, action is already completed — don't set as pending
+        pendingAction: action.status === "pending" ? action : null,
       }));
       return action;
     },

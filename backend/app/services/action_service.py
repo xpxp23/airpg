@@ -192,6 +192,11 @@ class ActionService:
 
         wait_seconds = eval_result.get("wait_seconds", 60)
         now = datetime.now(timezone.utc)
+
+        # Instant mode: skip timer, complete immediately
+        is_instant = game.game_mode == "instant"
+        if is_instant:
+            wait_seconds = 0
         finish_at = now + timedelta(seconds=wait_seconds)
 
         action = Action(
@@ -229,10 +234,14 @@ class ActionService:
         await self.db.commit()
         await self.db.refresh(action)
 
-        # Kick off narrative pre-generation in background during countdown
-        asyncio.create_task(
-            self._pregenerate_narrative(action.id, game_id, data.character_id)
-        )
+        if is_instant:
+            # Instant mode: complete action immediately, no timer
+            await self.complete_action(action.id)
+        else:
+            # Waiting mode: kick off narrative pre-generation in background during countdown
+            asyncio.create_task(
+                self._pregenerate_narrative(action.id, game_id, data.character_id)
+            )
 
         return action
 

@@ -46,6 +46,7 @@ class Game(Base):
     current_chapter: Mapped[int] = mapped_column(Integer, default=1)
     max_players: Mapped[int] = mapped_column(Integer, default=6)
     is_public: Mapped[bool] = mapped_column(Boolean, default=False)
+    game_mode: Mapped[str] = mapped_column(String(20), default="waiting")
     invite_code: Mapped[str | None] = mapped_column(String(8), unique=True, nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

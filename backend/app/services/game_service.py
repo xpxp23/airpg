@@ -32,6 +32,7 @@ class GameService:
             target_duration_minutes=target_minutes,
             max_players=data.max_players,
             is_public=data.is_public,
+            game_mode=data.game_mode,
             invite_code=self._generate_invite_code(),
             parse_status=ParseStatus.PENDING,
         )

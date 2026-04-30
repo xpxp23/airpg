@@ -26,6 +26,7 @@ def _game_to_response(game, player_count: int = 0) -> GameResponse:
         current_chapter=game.current_chapter,
         max_players=game.max_players,
         is_public=game.is_public,
+        game_mode=game.game_mode,
         invite_code=game.invite_code,
         started_at=game.started_at,
         finished_at=game.finished_at,
@@ -85,14 +86,6 @@ async def get_game(
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    # Auth check: private games only accessible by creator or participants
-    if not game.is_public:
-        is_creator = game.creator_id == current_user.id
-        if not is_creator:
-            character = await game_service.get_player_character(game_id, current_user.id)
-            if not character:
-                raise HTTPException(status_code=403, detail="This game is private")
-
     player_count = await game_service.get_player_count(game_id)
 
     return GameDetailResponse(
@@ -103,6 +96,7 @@ async def get_game(
         current_chapter=game.current_chapter,
         max_players=game.max_players,
         is_public=game.is_public,
+        game_mode=game.game_mode,
         invite_code=game.invite_code,
         started_at=game.started_at,
         finished_at=game.finished_at,

@@ -7,9 +7,10 @@ interface ActionInputProps {
   pendingAction: GameAction | null;
   onSubmit: (text: string) => Promise<any>;
   onCancel: (actionId: string) => Promise<void>;
+  gameMode?: "waiting" | "instant";
 }
 
-export function ActionInput({ pendingAction, onSubmit, onCancel }: ActionInputProps) {
+export function ActionInput({ pendingAction, onSubmit, onCancel, gameMode }: ActionInputProps) {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [remaining, setRemaining] = useState(0);
@@ -47,6 +48,22 @@ export function ActionInput({ pendingAction, onSubmit, onCancel }: ActionInputPr
   };
 
   if (pendingAction) {
+    // Instant mode: show simple spinner (action completes almost instantly)
+    if (gameMode === "instant") {
+      return (
+        <div className="bg-fantasy-card/60 backdrop-blur-sm border-t border-fantasy-accent/10 px-3 sm:px-4 py-2.5 sm:py-3 safe-area-bottom">
+          <div className="flex items-center gap-3">
+            <div className="animate-spin w-4 h-4 border-2 border-fantasy-accent border-t-transparent rounded-full" />
+            <div className="min-w-0 flex-1">
+              <div className="text-fantasy-text text-sm truncate">
+                {pendingAction.public_snippet}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="bg-fantasy-card/60 backdrop-blur-sm border-t border-fantasy-accent/10 px-3 sm:px-4 py-2.5 sm:py-3 safe-area-bottom">
         <div className="flex items-center justify-between mb-2">

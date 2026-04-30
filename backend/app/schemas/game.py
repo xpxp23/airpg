@@ -7,7 +7,8 @@ class GameCreate(BaseModel):
     duration_hint: str | None = None
     title: str | None = None
     max_players: int = 6
-    is_public: bool = False
+    is_public: bool = True
+    game_mode: str = "waiting"
 
 
 class GameJoin(BaseModel):
@@ -23,6 +24,7 @@ class GameResponse(BaseModel):
     current_chapter: int
     max_players: int
     is_public: bool
+    game_mode: str = "waiting"
     invite_code: str | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None

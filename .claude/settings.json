@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"from alembic.config import main; main\\(['upgrade', 'head']\\)\")",
+      "Bash(alembic upgrade *)",
+      "Bash(./venv/Scripts/alembic upgrade *)",
+      "Bash(PYTHONPATH=. ./venv/Scripts/alembic upgrade head)",
+      "Bash(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 root@113.44.215.170 \"hostname && uname -a && uptime\")",
+      "Bash(where choco *)",
+      "Bash(where scoop *)",
+      "Bash(where winget *)",
+      "Bash(python -c ' *)",
+      "Bash(pip install *)",
+      "Bash(python)",
+      "Bash(python3 -c ' *)",
+      "Bash(ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no root@113.44.215.170 \"cd /opt/airpg && docker compose -f docker-compose.prod.yml ps\")",
+      "Bash(ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no root@113.44.215.170 \"echo ok\")",
+      "Read(//c/Users/Administrator/.ssh/**)",
+      "Bash(python3 -c \"import paramiko; print\\('paramiko available'\\)\")",
+      "Bash(python -c \"import paramiko; print\\('paramiko available'\\)\")",
+      "Bash(PYTHONIOENCODING=utf-8 python)",
+      "Bash(ssh -o BatchMode=yes -o ConnectTimeout=5 root@113.44.215.170 \"echo connected\")",
+      "Bash(git format-patch *)",
+      "Read(//tmp/**)",
+      "Bash(cygpath -w /tmp/mobile-ui.patch)",
+      "Bash(ssh -o StrictHostKeyChecking=no -p 22 root@113.44.215.170 \"cat /opt/airpg/nginx/nginx.conf\")",
+      "Bash(git reset *)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('backend/app/config.py','r',encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(mkdir -p d:/tmp)"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
+    ]
+  }
+}

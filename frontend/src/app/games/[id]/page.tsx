@@ -236,9 +236,18 @@ export default function GameRoomPage() {
     return (
       <div className="max-w-4xl mx-auto px-4 py-4 sm:py-8">
         <div className="bg-fantasy-card/60 backdrop-blur-sm rounded-2xl p-4 sm:p-8 border border-fantasy-accent/10">
-          <h1 className="text-2xl sm:text-3xl font-bold mb-2 text-fantasy-text">
-            {game.title || "准备中..."}
-          </h1>
+          <div className="flex items-center gap-3 mb-2">
+            <h1 className="text-2xl sm:text-3xl font-bold text-fantasy-text">
+              {game.title || "准备中..."}
+            </h1>
+            <span className={`text-xs px-2 py-1 rounded-full shrink-0 ${
+              game.game_mode === "instant"
+                ? "bg-yellow-500/20 text-yellow-400"
+                : "bg-blue-500/20 text-blue-400"
+            }`}>
+              {game.game_mode === "instant" ? "⚡ 即玩" : "⏳ 等待"}
+            </span>
+          </div>
 
           {game.parse_status === "processing" && (
             <div className="bg-fantasy-accent/10 border border-fantasy-accent/20 rounded-lg px-4 py-3 mb-4">
@@ -421,9 +430,18 @@ export default function GameRoomPage() {
         {/* Game header */}
         <div className="bg-fantasy-card/60 backdrop-blur-sm border-b border-fantasy-accent/10 px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between">
           <div className="min-w-0 flex-1">
-            <h1 className="text-sm sm:text-base font-semibold text-fantasy-text truncate">
-              {game.title || "游戏进行中"}
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm sm:text-base font-semibold text-fantasy-text truncate">
+                {game.title || "游戏进行中"}
+              </h1>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${
+                game.game_mode === "instant"
+                  ? "bg-yellow-500/20 text-yellow-400"
+                  : "bg-blue-500/20 text-blue-400"
+              }`}>
+                {game.game_mode === "instant" ? "⚡即玩" : "⏳等待"}
+              </span>
+            </div>
             <div className="text-[10px] sm:text-xs text-fantasy-muted/60">
               第 {game.current_chapter} 章 · {characters.filter((c) => c.is_alive).length} 名冒险者存活
             </div>
@@ -522,6 +540,7 @@ export default function GameRoomPage() {
           pendingAction={pendingAction}
           onSubmit={submitAction}
           onCancel={cancelAction}
+          gameMode={game.game_mode}
         />
       </div>
 
@@ -535,6 +554,7 @@ export default function GameRoomPage() {
           onCooperation={(targetActionId, text) =>
             submitCooperation(targetActionId, text)
           }
+          gameMode={game.game_mode}
         />
       )}
     </div>

@@ -5,9 +5,10 @@ import { GameAction } from "@/types";
 interface CooperationPanelProps {
   actions: GameAction[];
   myCharacterId: string | null;
+  gameMode?: "waiting" | "instant";
 }
 
-export function CooperationPanel({ actions, myCharacterId }: CooperationPanelProps) {
+export function CooperationPanel({ actions, myCharacterId, gameMode }: CooperationPanelProps) {
   const cooperationActions = actions.filter(
     (a) => a.action_type === "cooperation" && a.status === "pending"
   );
@@ -37,7 +38,7 @@ export function CooperationPanel({ actions, myCharacterId }: CooperationPanelPro
               <div className="text-sm text-fantasy-text">
                 {action.public_snippet}
               </div>
-              {action.remaining_seconds !== undefined && action.remaining_seconds > 0 && (
+              {gameMode !== "instant" && action.remaining_seconds !== undefined && action.remaining_seconds > 0 && (
                 <div className="text-xs text-fantasy-muted mt-1">
                   ⏳ 剩余 {Math.ceil(action.remaining_seconds)} 秒
                 </div>

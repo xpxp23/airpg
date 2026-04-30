@@ -77,6 +77,7 @@ class ApiClient {
     title?: string;
     max_players?: number;
     is_public?: boolean;
+    game_mode?: string;
   }): Promise<Game> {
     return this.request("/games", {
       method: "POST",

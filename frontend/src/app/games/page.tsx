@@ -111,10 +111,19 @@ export default function GamesPage() {
               className="bg-fantasy-card/60 backdrop-blur-sm rounded-xl p-6 border border-fantasy-accent/10 hover:border-fantasy-accent/30 transition-all group"
             >
               <div className="flex items-start justify-between mb-3">
-                <h2 className="text-lg font-semibold text-fantasy-text group-hover:text-fantasy-accent transition-colors line-clamp-1">
-                  {game.title || "未命名游戏"}
-                </h2>
-                <span className={`text-xs px-2 py-1 rounded-full ${statusLabels[game.status]?.color || ""}`}>
+                <div className="min-w-0 flex-1 flex items-center gap-2">
+                  <h2 className="text-lg font-semibold text-fantasy-text group-hover:text-fantasy-accent transition-colors line-clamp-1">
+                    {game.title || "未命名游戏"}
+                  </h2>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${
+                    game.game_mode === "instant"
+                      ? "bg-yellow-500/20 text-yellow-400"
+                      : "bg-blue-500/20 text-blue-400"
+                  }`}>
+                    {game.game_mode === "instant" ? "⚡即玩" : "⏳等待"}
+                  </span>
+                </div>
+                <span className={`text-xs px-2 py-1 rounded-full shrink-0 ml-2 ${statusLabels[game.status]?.color || ""}`}>
                   {statusLabels[game.status]?.label || game.status}
                 </span>
               </div>

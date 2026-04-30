@@ -20,6 +20,7 @@ export interface Game {
   current_chapter: number;
   max_players: number;
   is_public: boolean;
+  game_mode: "waiting" | "instant";
   invite_code?: string;
   started_at?: string;
   finished_at?: string;

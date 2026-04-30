@@ -48,6 +48,7 @@ class Action(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     result_narrative: Mapped[str | None] = mapped_column(Text, nullable=True)
     result_effects: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    narrative_result_cache: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     difficulty: Mapped[str | None] = mapped_column(String(20), nullable=True)
     risk: Mapped[str | None] = mapped_column(String(20), nullable=True)
     is_cooperation: Mapped[bool] = mapped_column(Boolean, default=False)

@@ -1,4 +1,6 @@
 import uuid
+import asyncio
+import logging
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,6 +8,8 @@ from app.models import Action, ActionStatus, ActionType, Character, Game, GameSt
 from app.schemas.action import ActionCreate, CooperationCreate, ActionResponse, CooperationResponse
 from app.services.ai_service import AIService
 from app.services.game_service import GameService
+
+logger = logging.getLogger(__name__)
 
 
 class ActionService:
@@ -223,7 +227,62 @@ class ActionService:
         self.db.add(event)
         await self.db.commit()
         await self.db.refresh(action)
+
+        # Kick off narrative pre-generation in background during countdown
+        asyncio.create_task(
+            self._pregenerate_narrative(action.id, game_id, data.character_id)
+        )
+
         return action
+
+    async def _pregenerate_narrative(self, action_id: str, game_id: str, character_id: str):
+        """Background task: generate narrative during countdown period."""
+        from app.database import async_session
+
+        try:
+            async with async_session() as db:
+                action_svc = ActionService(db)
+
+                action = await action_svc.get_action(action_id)
+                if not action or action.status != ActionStatus.PENDING:
+                    return
+
+                game = await action_svc.game_service.get_game(game_id)
+                character = await action_svc.game_service.get_character(character_id)
+                if not game or not character:
+                    return
+
+                ctx = await action_svc._build_game_context(game, character)
+
+                try:
+                    narrative_result = await action_svc.ai_service.generate_narrative(
+                        action_text=action.input_text,
+                        character_name=character.name,
+                        wait_seconds=action.wait_seconds,
+                        difficulty=action.difficulty or "medium",
+                        risk=action.risk or "low",
+                        game_memory=ctx["story_summary"],
+                        current_scene=ctx["current_scene"],
+                        character_status=ctx["character_status"],
+                        all_characters_status=ctx["all_characters_status"],
+                        chapter_info=ctx["chapter_info"],
+                        recent_events=ctx["recent_events"],
+                        story_summary=ctx["story_summary"],
+                    )
+                except Exception as e:
+                    logger.warning(f"Pre-generation failed for action {action_id}: {e}")
+                    return
+
+                # Re-check status before storing (may have been cancelled)
+                await db.refresh(action)
+                if action.status != ActionStatus.PENDING:
+                    return
+
+                action.narrative_result_cache = narrative_result
+                await db.commit()
+                logger.info(f"Pre-generated narrative for action {action_id}")
+        except Exception as e:
+            logger.error(f"Pre-generation error for action {action_id}: {e}")
 
     async def complete_action(self, action_id: str) -> Action:
         action = await self.get_action(action_id)
@@ -233,35 +292,36 @@ class ActionService:
         game = await self.game_service.get_game(action.game_id)
         character = await self.game_service.get_character(action.character_id)
 
-        # Build full game context for AI
-        ctx = await self._build_game_context(game, character)
-
-        # Generate narrative - with full context, fallback on failure
-        try:
-            narrative_result = await self.ai_service.generate_narrative(
-                action_text=action.input_text,
-                character_name=character.name,
-                wait_seconds=action.wait_seconds,
-                difficulty=action.difficulty or "medium",
-                risk=action.risk or "low",
-                game_memory=ctx["story_summary"],
-                current_scene=ctx["current_scene"],
-                character_status=ctx["character_status"],
-                all_characters_status=ctx["all_characters_status"],
-                chapter_info=ctx["chapter_info"],
-                recent_events=ctx["recent_events"],
-                story_summary=ctx["story_summary"],
-            )
-        except Exception:
-            # Fallback if AI fails
-            narrative_result = {
-                "narrative": f"{character.name}完成了行动。",
-                "outcome": "success",
-                "effects": {},
-                "chapter_progress": {"advance_chapter": False},
-                "game_over": False,
-                "importance": "medium",
-            }
+        # Check if narrative was pre-generated during countdown
+        if action.narrative_result_cache:
+            narrative_result = action.narrative_result_cache
+        else:
+            # Fallback: generate narrative now (pre-generation may have failed)
+            ctx = await self._build_game_context(game, character)
+            try:
+                narrative_result = await self.ai_service.generate_narrative(
+                    action_text=action.input_text,
+                    character_name=character.name,
+                    wait_seconds=action.wait_seconds,
+                    difficulty=action.difficulty or "medium",
+                    risk=action.risk or "low",
+                    game_memory=ctx["story_summary"],
+                    current_scene=ctx["current_scene"],
+                    character_status=ctx["character_status"],
+                    all_characters_status=ctx["all_characters_status"],
+                    chapter_info=ctx["chapter_info"],
+                    recent_events=ctx["recent_events"],
+                    story_summary=ctx["story_summary"],
+                )
+            except Exception:
+                narrative_result = {
+                    "narrative": f"{character.name}完成了行动。",
+                    "outcome": "success",
+                    "effects": {},
+                    "chapter_progress": {"advance_chapter": False},
+                    "game_over": False,
+                    "importance": "medium",
+                }
 
         # Update action
         action.status = ActionStatus.COMPLETED
@@ -546,6 +606,9 @@ class ActionService:
             finish_at = action.finish_at.replace(tzinfo=timezone.utc) if action.finish_at.tzinfo is None else action.finish_at
             remaining = max(0, (finish_at - now).total_seconds())
 
+        # Hide pre-generated narrative from pending actions
+        is_pending = action.status == ActionStatus.PENDING
+
         return ActionResponse(
             id=action.id,
             game_id=action.game_id,
@@ -558,8 +621,8 @@ class ActionService:
             started_at=action.started_at,
             finish_at=action.finish_at,
             completed_at=action.completed_at,
-            result_narrative=action.result_narrative,
-            result_effects=action.result_effects,
+            result_narrative=None if is_pending else action.result_narrative,
+            result_effects=None if is_pending else action.result_effects,
             difficulty=action.difficulty,
             risk=action.risk,
             is_cooperation=action.is_cooperation,

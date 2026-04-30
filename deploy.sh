@@ -318,6 +318,17 @@ docker compose -f $COMPOSE_FILE pull --quiet postgres redis nginx 2>/dev/null ||
 
 log_info "基础镜像拉取完成"
 
+# ----- 备份 admin 设置 -----
+
+log_step "5.5/7 备份管理设置..."
+ADMIN_SETTINGS_FILE="backend/data/admin_settings.json"
+if [ -f "$ADMIN_SETTINGS_FILE" ] && [ "$(cat "$ADMIN_SETTINGS_FILE" 2>/dev/null)" != "{}" ] && [ -s "$ADMIN_SETTINGS_FILE" ]; then
+    cp "$ADMIN_SETTINGS_FILE" "$BACKUP_DIR/admin_settings_$(date +%Y%m%d%H%M%S).json"
+    log_info "管理设置已备份"
+else
+    log_info "管理设置为空或不存在，跳过备份"
+fi
+
 # ----- 构建启动 -----
 
 log_step "6/7 构建并启动服务..."

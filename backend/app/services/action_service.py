@@ -2,10 +2,11 @@ import uuid
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Action, ActionStatus, ActionType, Character, Game, GameStatus, Event, EventType
 from app.schemas.action import ActionCreate, CooperationCreate, ActionResponse, CooperationResponse
+from app.config import get_settings
 from app.services.ai_service import AIService
 from app.services.game_service import GameService
 
@@ -93,8 +94,9 @@ class ActionService:
         if current_character:
             character_status_str = str(current_character.status_effects or {})
 
-        # 最近事件（取最近 20 条可见事件）
-        recent_events_list = await self.game_service.get_game_events(game.id, limit=20)
+        # 最近事件（取最近 N 条可见事件，N 由 admin 配置）
+        keep_recent = get_settings().MEMORY_COMPRESS_KEEP_RECENT
+        recent_events_list = await self.game_service.get_game_events(game.id, limit=keep_recent)
         recent_events_lines = []
         for ev in reversed(recent_events_list):  # 按时间正序
             data = ev.data or {}
@@ -123,8 +125,15 @@ class ActionService:
             elapsed_time = f"{hours}小时{minutes}分钟" if hours > 0 else f"{minutes}分钟"
         target_duration = f"{game.target_duration_minutes}分钟" if game.target_duration_minutes else "未设定"
 
+        # game_memory = story background + compressed history
+        game_memory = story_summary
+        if game.compressed_memory:
+            game_memory += f"\n\n===== 游戏记忆（历史摘要）=====\n{game.compressed_memory}"
+
         return {
             "story_summary": story_summary,
+            "compressed_memory": game.compressed_memory or "",
+            "game_memory": game_memory,
             "current_scene": current_scene,
             "chapter_info": chapter_info,
             "chapter": chapter,
@@ -177,7 +186,7 @@ class ActionService:
                 characters_status=ctx["all_characters_status"],
                 elapsed_time=ctx["elapsed_time"],
                 target_duration=ctx["target_duration"],
-                game_memory=ctx["story_summary"],
+                game_memory=ctx["game_memory"],
                 character_name=character.name,
                 recent_events=ctx["recent_events"],
             )
@@ -271,7 +280,7 @@ class ActionService:
                         wait_seconds=action.wait_seconds,
                         difficulty=action.difficulty or "medium",
                         risk=action.risk or "low",
-                        game_memory=ctx["story_summary"],
+                        game_memory=ctx["game_memory"],
                         current_scene=ctx["current_scene"],
                         character_status=ctx["character_status"],
                         all_characters_status=ctx["all_characters_status"],
@@ -315,7 +324,7 @@ class ActionService:
                     wait_seconds=action.wait_seconds,
                     difficulty=action.difficulty or "medium",
                     risk=action.risk or "low",
-                    game_memory=ctx["story_summary"],
+                    game_memory=ctx["game_memory"],
                     current_scene=ctx["current_scene"],
                     character_status=ctx["character_status"],
                     all_characters_status=ctx["all_characters_status"],
@@ -377,6 +386,10 @@ class ActionService:
             await self.game_service.end_game(action.game_id, "story_completed")
 
         await self.db.commit()
+
+        # Check if memory compression is needed (async, non-blocking)
+        asyncio.create_task(self._maybe_compress_memory(action.game_id))
+
         return action
 
     async def _apply_effects(self, character: Character, effects: dict):
@@ -415,6 +428,170 @@ class ActionService:
             character.location = location_change
 
         character.status_effects = status
+
+    async def _maybe_compress_memory(self, game_id: str):
+        """Check if memory compression is needed and trigger it if so.
+
+        Called after action completion. Runs the actual AI compression in a
+        background task so it doesn't block the response.
+        """
+        settings = get_settings()
+        event_threshold = settings.MEMORY_COMPRESS_EVENT_THRESHOLD
+        char_threshold = settings.MEMORY_COMPRESS_CHAR_THRESHOLD
+
+        # Skip if both thresholds are 0 (disabled)
+        if event_threshold <= 0 and char_threshold <= 0:
+            return
+
+        game = await self.game_service.get_game(game_id)
+        if not game or game.status != GameStatus.ACTIVE:
+            return
+
+        # Count events after last compression
+        base_count = game.memory_event_count or 0
+        result = await self.db.execute(
+            select(func.count(Event.id)).where(
+                Event.game_id == game_id,
+                Event.is_visible == True,
+            )
+        )
+        total_events = result.scalar() or 0
+        new_event_count = total_events - base_count
+
+        if new_event_count <= 0:
+            return
+
+        # Check event count threshold
+        triggered = event_threshold > 0 and new_event_count >= event_threshold
+
+        # Check char count threshold
+        if not triggered and char_threshold > 0:
+            result = await self.db.execute(
+                select(Event).where(
+                    Event.game_id == game_id,
+                    Event.is_visible == True,
+                ).order_by(Event.timestamp.desc()).offset(base_count)
+            )
+            new_events = list(result.scalars().all())
+            total_chars = sum(len(str(e.data or "")) for e in new_events)
+            triggered = total_chars >= char_threshold
+
+        if not triggered:
+            return
+
+        # Trigger compression in background
+        asyncio.create_task(self._run_memory_compression(game_id, base_count, total_events))
+
+    async def _run_memory_compression(self, game_id: str, base_count: int, total_events: int):
+        """Background task: compress old events into memory summary."""
+        try:
+            # Use a fresh session for the background task
+            from app.database import async_session
+
+            async with async_session() as db:
+                game_svc = GameService(db)
+                game = await game_svc.get_game(game_id)
+                if not game:
+                    return
+
+                settings = get_settings()
+                keep_recent = settings.MEMORY_COMPRESS_KEEP_RECENT
+
+                # Get all visible events ordered by time
+                result = await db.execute(
+                    select(Event).where(
+                        Event.game_id == game_id,
+                        Event.is_visible == True,
+                    ).order_by(Event.timestamp.asc())
+                )
+                all_events = list(result.scalars().all())
+
+                # Events to compress: everything except the last `keep_recent`
+                if len(all_events) <= keep_recent:
+                    return
+
+                events_to_compress = all_events[:-keep_recent]
+
+                # Format events for compression
+                event_lines = []
+                for ev in events_to_compress:
+                    data = ev.data or {}
+                    ts = ev.timestamp.strftime("%H:%M") if ev.timestamp else "??:??"
+                    if ev.type == EventType.ACTION_RESULT:
+                        event_lines.append(f"[{ts}] {data.get('character_name', '?')} 的行动结果：{data.get('narrative', '')[:300]}")
+                    elif ev.type == EventType.ACTION_START:
+                        event_lines.append(f"[{ts}] {data.get('character_name', '?')} 开始行动：{data.get('public_snippet', '')}")
+                    elif ev.type == EventType.GAME_START:
+                        event_lines.append(f"[{ts}] 游戏开始：{data.get('narrative', '')[:300]}")
+                    elif ev.type == EventType.CHAPTER_ADVANCE:
+                        event_lines.append(f"[{ts}] 进入第{data.get('chapter', '?')}章：{data.get('description', '')}")
+                    elif ev.type == EventType.COOPERATION_RESULT:
+                        event_lines.append(f"[{ts}] {data.get('helper_name', '?')} 协助了 {data.get('target_name', '?')}：{data.get('narrative', '')}")
+                    elif ev.type == EventType.PLAYER_JOIN:
+                        event_lines.append(f"[{ts}] {data.get('character_name', '?')} 加入了队伍")
+                    elif ev.type == EventType.PLAYER_LEAVE:
+                        event_lines.append(f"[{ts}] {data.get('character_name', '?')} 离开了队伍")
+
+                recent_events_text = "\n".join(event_lines)
+                if not recent_events_text:
+                    return
+
+                # Get character status
+                chars = await game_svc.get_game_characters(game_id)
+                char_lines = []
+                for c in chars:
+                    if not c.player_id:
+                        continue
+                    status = c.status_effects or {}
+                    health = status.get("health", 100)
+                    line = f"- {c.name}（{'存活' if c.is_alive else '倒下'}）生命：{health}/100"
+                    if c.location:
+                        line += f" 位置：{c.location}"
+                    char_lines.append(line)
+                characters_status = "\n".join(char_lines) or "暂无"
+
+                # Story summary
+                ai = game.ai_summary or {}
+                story_parts = []
+                if ai.get("title"):
+                    story_parts.append(f"故事标题：{ai['title']}")
+                if ai.get("main_goal"):
+                    story_parts.append(f"主线目标：{ai['main_goal']}")
+                story_summary = "\n".join(story_parts)
+
+                # Call AI compression
+                ai_svc = AIService()
+                existing_summary = game.compressed_memory or ""
+                result = await ai_svc.compress_memory(
+                    recent_events=recent_events_text,
+                    characters_status=characters_status,
+                    story_summary=story_summary,
+                    existing_summary=existing_summary,
+                )
+
+                # Build the compressed memory text
+                memory_parts = []
+                if result.get("memory_summary"):
+                    memory_parts.append(result["memory_summary"])
+                if result.get("key_facts"):
+                    memory_parts.append("关键事实：" + "；".join(result["key_facts"]))
+                if result.get("pending_threads"):
+                    memory_parts.append("未解悬念：" + "；".join(result["pending_threads"]))
+                if result.get("character_relationships"):
+                    memory_parts.append("角色关系：" + result["character_relationships"])
+
+                compressed_text = "\n".join(memory_parts)
+
+                # Update game
+                game.compressed_memory = compressed_text
+                game.memory_event_count = total_events
+                game.last_memory_compress_at = datetime.now(timezone.utc)
+                await db.commit()
+
+                logger.info(f"Memory compressed for game {game_id}: {len(events_to_compress)} events -> {len(compressed_text)} chars")
+
+        except Exception as e:
+            logger.error(f"Memory compression failed for game {game_id}: {e}")
 
     async def submit_cooperation(self, game_id: str, user_id: str, data: CooperationCreate) -> Action:
         # Validate game state
@@ -574,6 +751,10 @@ class ActionService:
         )
         self.db.add(event)
         await self.db.commit()
+
+        # Check if memory compression is needed (async, non-blocking)
+        asyncio.create_task(self._maybe_compress_memory(cooperation.game_id))
+
         return cooperation, target_action
 
     async def get_action(self, action_id: str) -> Action | None:

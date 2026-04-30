@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 60
 
+    # Memory Compression
+    MEMORY_COMPRESS_EVENT_THRESHOLD: int = 30
+    MEMORY_COMPRESS_CHAR_THRESHOLD: int = 150000
+    MEMORY_COMPRESS_KEEP_RECENT: int = 20
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
@@ -67,6 +72,8 @@ ADMIN_SETTINGS_FIELDS = {
     "AI_MODEL_DEFAULT", "AI_MODEL_PREMIUM",
     "MAX_TOKENS", "MAX_TOKENS_DEFAULT",
     "AI_THINKING_ENABLED", "AI_THINKING_EFFORT",
+    "MEMORY_COMPRESS_EVENT_THRESHOLD", "MEMORY_COMPRESS_CHAR_THRESHOLD",
+    "MEMORY_COMPRESS_KEEP_RECENT",
 }
 
 # Prompt fields (stored in admin_settings.json, NOT on Settings class)

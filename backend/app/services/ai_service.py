@@ -90,14 +90,17 @@ DEFAULT_PROMPT_EVALUATE_COOPERATION = """你是一个跑团主持人。一个玩
 - 协作强调的是团队合作，双方都能获得收益
 - 考虑协作行为是否能触发叙事网络中的关联（如两个角色合作可能引出新线索）"""
 
-DEFAULT_PROMPT_COMPRESS_MEMORY = """你是一个跑团记录员。请将以下游戏事件压缩为结构化的记忆摘要，供后续 AI 主持人使用。
+DEFAULT_PROMPT_COMPRESS_MEMORY = """你是一个跑团记录员。请将游戏事件压缩为结构化的记忆摘要，供后续 AI 主持人使用。
+
+{existing_section}
 
 要求：
 1. 保留所有关键信息：角色状态变化、重要发现、场景变化、NPC 关系变化
 2. 按时间线梳理事件因果关系
 3. 标记未解决的悬念和线索（这些是未来信息钩子的素材）
 4. 记录角色之间的互动关系
-5. 标记玩家的行动模式（是否有明确目标还是漫无目的），帮助主持人判断是否需要触发推动事件"""
+5. 标记玩家的行动模式（是否有明确目标还是漫无目的），帮助主持人判断是否需要触发推动事件
+6. 如果提供了已有记忆摘要，请将新事件增量合并到已有摘要中，保持连贯性，不要丢失已有信息"""
 
 
 # JSON templates (fixed, not editable by admin)
@@ -211,7 +214,7 @@ TEMPLATE_EVALUATE_COOPERATION = '''
 TEMPLATE_COMPRESS_MEMORY = '''
 返回严格的 JSON：
 {
-  "memory_summary": "200-400字的整体游戏进展摘要",
+  "memory_summary": "200-500字的整体游戏进展摘要（如有已有摘要，应包含已有内容并融入新事件）",
   "key_facts": ["关键事实1", "关键事实2"],
   "pending_threads": ["未解决的悬念/线索1"],
   "character_relationships": "角色间关系简述"
@@ -550,12 +553,19 @@ class AIService:
 
         return await self.call_json(system_prompt, f"协作描述：{cooperation_text}", temperature=0.2)
 
-    async def compress_memory(self, recent_events: str, characters_status: str, story_summary: str = "") -> dict:
-        system_prompt = self._get_prompt("PROMPT_COMPRESS_MEMORY")
+    async def compress_memory(self, recent_events: str, characters_status: str, story_summary: str = "", existing_summary: str = "") -> dict:
+        prompt_template = self._get_prompt("PROMPT_COMPRESS_MEMORY")
+
+        if existing_summary:
+            existing_section = f"===== 已有记忆摘要 =====\n以下是之前的游戏记忆摘要，请将新事件增量合并到其中：\n{existing_summary}"
+        else:
+            existing_section = ""
+
+        system_prompt = prompt_template.replace("{existing_section}", existing_section)
 
         result = await self.call_json(
             system_prompt,
-            f"故事背景：\n{story_summary}\n\n最近事件：\n{recent_events}\n\n当前角色状态：\n{characters_status}",
+            f"故事背景：\n{story_summary}\n\n新事件：\n{recent_events}\n\n当前角色状态：\n{characters_status}",
             temperature=0.3,
         )
         return result

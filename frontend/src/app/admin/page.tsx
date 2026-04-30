@@ -348,6 +348,58 @@ export default function AdminPage() {
           </div>
         </div>
 
+        {/* Memory Compression */}
+        <div className="bg-fantasy-card/80 backdrop-blur-sm rounded-2xl p-6 border border-fantasy-accent/10 space-y-5">
+          <h2 className="text-lg font-semibold text-fantasy-text border-b border-fantasy-accent/10 pb-3">
+            记忆压缩
+          </h2>
+          <p className="text-xs text-fantasy-muted/60">
+            当游戏事件积累到一定程度时，AI 会自动压缩历史事件为记忆摘要，避免遗忘早期剧情。满足任一条件即触发压缩。
+          </p>
+
+          <div>
+            <label className="block text-sm font-medium text-fantasy-muted mb-2">
+              事件轮数阈值
+            </label>
+            <input
+              type="number"
+              value={settings.MEMORY_COMPRESS_EVENT_THRESHOLD}
+              onChange={(e) => updateField("MEMORY_COMPRESS_EVENT_THRESHOLD", parseInt(e.target.value) || 0)}
+              className="w-full bg-fantasy-bg/50 border border-fantasy-accent/20 rounded-lg px-4 py-3 text-fantasy-text focus:outline-none focus:border-fantasy-accent/50 transition-colors"
+              min={0}
+            />
+            <p className="text-xs text-fantasy-muted mt-1">未压缩事件达到此数量时触发压缩，设为 0 则禁用此条件</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-fantasy-muted mb-2">
+              字数阈值
+            </label>
+            <input
+              type="number"
+              value={settings.MEMORY_COMPRESS_CHAR_THRESHOLD}
+              onChange={(e) => updateField("MEMORY_COMPRESS_CHAR_THRESHOLD", parseInt(e.target.value) || 0)}
+              className="w-full bg-fantasy-bg/50 border border-fantasy-accent/20 rounded-lg px-4 py-3 text-fantasy-text focus:outline-none focus:border-fantasy-accent/50 transition-colors"
+              min={0}
+            />
+            <p className="text-xs text-fantasy-muted mt-1">未压缩事件总字数达到此值时触发压缩，设为 0 则禁用此条件</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-fantasy-muted mb-2">
+              保留最近事件数
+            </label>
+            <input
+              type="number"
+              value={settings.MEMORY_COMPRESS_KEEP_RECENT}
+              onChange={(e) => updateField("MEMORY_COMPRESS_KEEP_RECENT", parseInt(e.target.value) || 1)}
+              className="w-full bg-fantasy-bg/50 border border-fantasy-accent/20 rounded-lg px-4 py-3 text-fantasy-text focus:outline-none focus:border-fantasy-accent/50 transition-colors"
+              min={1}
+            />
+            <p className="text-xs text-fantasy-muted mt-1">压缩时保留最近 N 条事件作为短期记忆，不参与压缩</p>
+          </div>
+        </div>
+
         {/* Thinking Mode */}
         <div className="bg-fantasy-card/80 backdrop-blur-sm rounded-2xl p-6 border border-fantasy-accent/10 space-y-5">
           <h2 className="text-lg font-semibold text-fantasy-text border-b border-fantasy-accent/10 pb-3">

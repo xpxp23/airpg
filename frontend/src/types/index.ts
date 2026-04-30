@@ -145,6 +145,10 @@ export interface AdminSettings {
   MAX_TOKENS_DEFAULT: number;
   AI_THINKING_ENABLED: boolean;
   AI_THINKING_EFFORT: string;
+  // Memory compression
+  MEMORY_COMPRESS_EVENT_THRESHOLD: number;
+  MEMORY_COMPRESS_CHAR_THRESHOLD: number;
+  MEMORY_COMPRESS_KEEP_RECENT: number;
   // Prompt overrides (optional, empty string or missing = use default)
   PROMPT_PARSE_STORY?: string;
   PROMPT_EVALUATE_ACTION?: string;

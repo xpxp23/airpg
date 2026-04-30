@@ -70,6 +70,10 @@ class AdminSettingsUpdate(BaseModel):
     MAX_TOKENS_DEFAULT: int | None = None
     AI_THINKING_ENABLED: bool | None = None
     AI_THINKING_EFFORT: str | None = None
+    # Memory compression
+    MEMORY_COMPRESS_EVENT_THRESHOLD: int | None = None
+    MEMORY_COMPRESS_CHAR_THRESHOLD: int | None = None
+    MEMORY_COMPRESS_KEEP_RECENT: int | None = None
     # Prompt overrides
     PROMPT_PARSE_STORY: str | None = None
     PROMPT_EVALUATE_ACTION: str | None = None

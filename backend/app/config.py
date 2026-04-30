@@ -5,6 +5,9 @@ from functools import lru_cache
 
 ADMIN_SETTINGS_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "admin_settings.json")
 
+# Track file modification time for change detection across workers
+_admin_settings_mtime: float = 0.0
+
 
 class Settings(BaseSettings):
     # Database
@@ -97,11 +100,34 @@ def save_admin_overrides(overrides: dict) -> None:
 
 def apply_admin_overrides() -> None:
     """Apply admin overrides to the cached Settings instance."""
+    global _admin_settings_mtime
     settings = get_settings()
     overrides = load_admin_overrides()
     for key, value in overrides.items():
         if key in ADMIN_SETTINGS_FIELDS:
             object.__setattr__(settings, key, value)
+    try:
+        _admin_settings_mtime = os.path.getmtime(ADMIN_SETTINGS_PATH)
+    except OSError:
+        _admin_settings_mtime = 0.0
+
+
+def refresh_settings_if_changed() -> None:
+    """Check if admin_settings.json changed on disk and reload if so.
+
+    With multi-worker uvicorn, each worker has its own Settings singleton.
+    When one worker saves new admin settings, other workers need to detect
+    the file change and reload. This function should be called once per
+    request (via middleware) so all workers stay in sync.
+    """
+    global _admin_settings_mtime
+    try:
+        current_mtime = os.path.getmtime(ADMIN_SETTINGS_PATH)
+    except OSError:
+        return
+
+    if current_mtime != _admin_settings_mtime:
+        apply_admin_overrides()
 
 
 def update_admin_settings(updates: dict) -> dict:
@@ -112,10 +138,16 @@ def update_admin_settings(updates: dict) -> dict:
     for key, value in updates.items():
         if key not in ADMIN_FIELDS:
             continue
-        if value is not None:
-            current[key] = value
-            if key in ADMIN_SETTINGS_FIELDS:
-                object.__setattr__(settings, key, value)
+        if value is None:
+            continue
+        # Skip empty strings for prompt fields - they should fall back to defaults
+        if key in ADMIN_PROMPT_FIELDS and value == "":
+            # Remove override so default takes effect
+            current.pop(key, None)
+            continue
+        current[key] = value
+        if key in ADMIN_SETTINGS_FIELDS:
+            object.__setattr__(settings, key, value)
 
     save_admin_overrides(current)
     return get_current_admin_settings()

@@ -8,11 +8,13 @@ import logging
 from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from app.config import get_settings
+from app.config import get_settings, refresh_settings_if_changed
 from app.models import Action, ActionStatus
 from app.services.action_service import ActionService
 
 settings = get_settings()
+# Apply admin overrides on worker startup
+refresh_settings_if_changed()
 logger = logging.getLogger(__name__)
 
 engine = create_async_engine(settings.DATABASE_URL)
@@ -49,6 +51,7 @@ async def worker_loop(interval: int = 5):
     logger.info("Action worker started")
     while True:
         try:
+            refresh_settings_if_changed()
             await check_pending_actions()
         except Exception as e:
             logger.error(f"Worker error: {e}")

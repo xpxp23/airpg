@@ -5,8 +5,6 @@ from openai import AsyncOpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
 from app.config import get_settings, load_admin_overrides
 
-settings = get_settings()
-
 
 # =============================================================================
 # Default prompt texts (editable by admin). JSON templates are appended separately.
@@ -238,12 +236,14 @@ class AIService:
     """统一 AI 服务，支持多模型和多提供商"""
 
     def __init__(self):
-        # 根据配置初始化客户端
+        # 根据配置初始化客户端 — read fresh settings each time
+        settings = get_settings()
         self.provider = settings.AI_PROVIDER
         self._init_client()
 
     def _init_client(self):
         """初始化 AI 客户端"""
+        settings = get_settings()
         if self.provider == "anthropic":
             # Anthropic Claude
             try:
@@ -267,6 +267,7 @@ class AIService:
 
     def _get_model(self, model: str | None, premium: bool = False) -> str:
         """获取模型名称"""
+        settings = get_settings()
         if model:
             return model
         if premium:
@@ -293,7 +294,7 @@ class AIService:
     ) -> dict:
         """调用 LLM 并确保返回有效 JSON"""
         if max_tokens is None:
-            max_tokens = settings.MAX_TOKENS_DEFAULT
+            max_tokens = get_settings().MAX_TOKENS_DEFAULT
         model = self._get_model(model, premium)
         content = await self._call_llm(system_prompt, user_prompt, model, temperature, max_tokens, json_mode=True, thinking=thinking)
 
@@ -318,7 +319,7 @@ class AIService:
     ) -> str:
         """调用 LLM 获取文本响应"""
         if max_tokens is None:
-            max_tokens = settings.MAX_TOKENS_DEFAULT
+            max_tokens = get_settings().MAX_TOKENS_DEFAULT
         model = self._get_model(model, premium)
         return await self._call_llm(system_prompt, user_prompt, model, temperature, max_tokens, json_mode=False, thinking=thinking)
 
@@ -357,9 +358,10 @@ class AIService:
         }
 
         # 思考模式控制
-        use_thinking = thinking if thinking is not None else settings.AI_THINKING_ENABLED
+        s = get_settings()
+        use_thinking = thinking if thinking is not None else s.AI_THINKING_ENABLED
         if use_thinking:
-            kwargs["reasoning_effort"] = settings.AI_THINKING_EFFORT
+            kwargs["reasoning_effort"] = s.AI_THINKING_EFFORT
             kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
 
         if json_mode:
@@ -404,10 +406,11 @@ class AIService:
         }
 
         # Anthropic 思考模式
-        use_thinking = thinking if thinking is not None else settings.AI_THINKING_ENABLED
+        s = get_settings()
+        use_thinking = thinking if thinking is not None else s.AI_THINKING_ENABLED
         if use_thinking:
             kwargs["thinking"] = {"type": "enabled"}
-            kwargs["output_config"] = {"effort": settings.AI_THINKING_EFFORT}
+            kwargs["output_config"] = {"effort": s.AI_THINKING_EFFORT}
 
         response = await self.client.messages.create(**kwargs)
 
@@ -427,7 +430,7 @@ class AIService:
 
         # 故事解析需要高质量模型，输出 JSON 较长需要更多 token
         return await self.call_json(
-            system_prompt, user_prompt, temperature=0.3, premium=True, max_tokens=settings.MAX_TOKENS
+            system_prompt, user_prompt, temperature=0.3, premium=True, max_tokens=get_settings().MAX_TOKENS
         )
 
     async def evaluate_action(

@@ -1,11 +1,13 @@
 from contextlib import asynccontextmanager
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import auth_router, games_router, characters_router, actions_router
 from app.routers.actions import cooperation_router
 from app.routers.admin import router as admin_router
 from app.database import engine, Base
-from app.config import apply_admin_overrides
+from app.config import apply_admin_overrides, refresh_settings_if_changed
 from app.models import *  # noqa: F401 - ensure all models are registered
 
 
@@ -19,12 +21,21 @@ async def lifespan(app: FastAPI):
     yield
 
 
+class AdminSettingsMiddleware(BaseHTTPMiddleware):
+    """Refresh admin settings from disk if changed, ensuring all workers stay in sync."""
+    async def dispatch(self, request: Request, call_next):
+        refresh_settings_if_changed()
+        return await call_next(request)
+
+
 app = FastAPI(
     title="AI Async Narrative RPG",
     description="AI 叙事型多人异步跑团游戏 API",
     version="0.1.0",
     lifespan=lifespan,
 )
+
+app.add_middleware(AdminSettingsMiddleware)
 
 # CORS - allow all origins for API (uses Bearer token auth, not cookies)
 app.add_middleware(

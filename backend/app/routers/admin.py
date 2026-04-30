@@ -5,7 +5,8 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
 
-from app.config import get_current_admin_settings, update_admin_settings, get_settings, get_default_prompts
+from app.config import get_current_admin_settings, update_admin_settings, get_settings
+from app.services.ai_service import get_default_prompts
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 

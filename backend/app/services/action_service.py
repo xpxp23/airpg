@@ -221,6 +221,7 @@ class ActionService:
                 "character_id": character.id,
                 "character_name": character.name,
                 "public_snippet": action.public_snippet,
+                "input_text": data.action_text,
                 "wait_seconds": wait_seconds,
             },
         )

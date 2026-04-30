@@ -35,6 +35,8 @@ export default function GameRoomPage() {
   const [starting, setStarting] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const eventsEndRef = useRef<HTMLDivElement>(null);
+  const eventsContainerRef = useRef<HTMLDivElement>(null);
+  const isNearBottomRef = useRef(true);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -42,8 +44,19 @@ export default function GameRoomPage() {
     }
   }, [user, authLoading, router]);
 
+  // Track if user is near the bottom of the event stream
+  const handleScroll = () => {
+    const el = eventsContainerRef.current;
+    if (!el) return;
+    const threshold = 120;
+    isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+  };
+
+  // Auto-scroll only when user is already near the bottom
   useEffect(() => {
-    eventsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (isNearBottomRef.current) {
+      eventsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [events]);
 
   const handleJoin = async (characterId?: string) => {
@@ -137,9 +150,11 @@ export default function GameRoomPage() {
       case "action_start":
         return {
           content: data.public_snippet || `${data.character_name} 开始行动`,
+          actionText: data.input_text,
           isSystem: false,
           icon: "⏳",
           characterName: data.character_name,
+          isAction: true,
         };
       case "action_result":
         return {
@@ -432,7 +447,11 @@ export default function GameRoomPage() {
         </div>
 
         {/* Events stream */}
-        <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 sm:py-6 space-y-2 sm:space-y-3">
+        <div
+          ref={eventsContainerRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 sm:py-6 space-y-2 sm:space-y-3"
+        >
           {sortedEvents.map((event) => {
             const display = getEventDisplay(event);
             const time = new Date(event.timestamp).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
@@ -464,13 +483,34 @@ export default function GameRoomPage() {
               );
             }
 
-            // Action start / cooperation start: compact inline
+            // Action start: card showing player's action
+            if (display.isAction) {
+              return (
+                <div key={event.id} className="message-enter bg-fantasy-accent/5 rounded-xl p-3 sm:p-4 border border-fantasy-accent/15">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-sm">{display.icon}</span>
+                    <span className="font-semibold text-fantasy-accent/90 text-xs sm:text-sm">{display.characterName}</span>
+                    <span className="text-fantasy-muted/40 text-[10px] sm:text-xs ml-auto tabular-nums">{time}</span>
+                  </div>
+                  {display.actionText && (
+                    <p className="text-fantasy-text/80 text-[13px] sm:text-sm leading-relaxed mb-1.5">
+                      「{display.actionText}」
+                    </p>
+                  )}
+                  <p className="text-fantasy-muted/50 text-[11px] sm:text-xs">{display.content}</p>
+                </div>
+              );
+            }
+
+            // Cooperation start / other: compact inline
             return (
-              <div key={event.id} className="message-enter flex items-center gap-2 text-sm py-1">
-                <span className="shrink-0">{display.icon}</span>
-                <span className="font-medium text-fantasy-accent/80">{display.characterName}</span>
-                <span className="text-fantasy-muted/60 truncate">{display.content}</span>
-                <span className="shrink-0 text-fantasy-muted/40 text-xs ml-auto tabular-nums">{time}</span>
+              <div key={event.id} className="message-enter flex items-start gap-2 text-sm py-1">
+                <span className="shrink-0 mt-0.5">{display.icon}</span>
+                <div className="min-w-0 flex-1">
+                  <span className="font-medium text-fantasy-accent/80">{display.characterName}</span>{" "}
+                  <span className="text-fantasy-muted/60">{display.content}</span>
+                </div>
+                <span className="shrink-0 text-fantasy-muted/40 text-xs tabular-nums mt-0.5">{time}</span>
               </div>
             );
           })}

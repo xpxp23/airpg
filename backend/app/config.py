@@ -58,17 +58,23 @@ class Settings(BaseSettings):
         env_file_encoding = "utf-8"
 
 
-# Admin-overridable fields (safe to expose in web UI)
-ADMIN_FIELDS = {
+# Admin-overridable fields on the Settings class
+ADMIN_SETTINGS_FIELDS = {
     "AI_PROVIDER", "AI_API_KEY", "AI_BASE_URL",
     "AI_MODEL_DEFAULT", "AI_MODEL_PREMIUM",
     "MAX_TOKENS", "MAX_TOKENS_DEFAULT",
     "AI_THINKING_ENABLED", "AI_THINKING_EFFORT",
-    # Prompt fields (stored as strings in admin_settings.json)
+}
+
+# Prompt fields (stored in admin_settings.json, NOT on Settings class)
+ADMIN_PROMPT_FIELDS = {
     "PROMPT_PARSE_STORY", "PROMPT_EVALUATE_ACTION",
     "PROMPT_GENERATE_NARRATIVE", "PROMPT_EVALUATE_COOPERATION",
     "PROMPT_COMPRESS_MEMORY",
 }
+
+# All admin-overridable fields
+ADMIN_FIELDS = ADMIN_SETTINGS_FIELDS | ADMIN_PROMPT_FIELDS
 
 
 def load_admin_overrides() -> dict:
@@ -94,7 +100,7 @@ def apply_admin_overrides() -> None:
     settings = get_settings()
     overrides = load_admin_overrides()
     for key, value in overrides.items():
-        if key in ADMIN_FIELDS:
+        if key in ADMIN_SETTINGS_FIELDS:
             object.__setattr__(settings, key, value)
 
 
@@ -108,7 +114,8 @@ def update_admin_settings(updates: dict) -> dict:
             continue
         if value is not None:
             current[key] = value
-            object.__setattr__(settings, key, value)
+            if key in ADMIN_SETTINGS_FIELDS:
+                object.__setattr__(settings, key, value)
 
     save_admin_overrides(current)
     return get_current_admin_settings()
@@ -117,7 +124,15 @@ def update_admin_settings(updates: dict) -> dict:
 def get_current_admin_settings() -> dict:
     """Get current effective values for admin-overridable fields."""
     settings = get_settings()
-    return {key: getattr(settings, key) for key in ADMIN_FIELDS}
+    overrides = load_admin_overrides()
+    result = {}
+    for key in ADMIN_FIELDS:
+        if key in ADMIN_SETTINGS_FIELDS:
+            result[key] = getattr(settings, key)
+        else:
+            # Prompt fields: return override or empty string
+            result[key] = overrides.get(key, "")
+    return result
 
 
 @lru_cache()

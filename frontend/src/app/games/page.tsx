@@ -55,18 +55,18 @@ export default function GamesPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold text-fantasy-text">游戏大厅</h1>
+    <div className="max-w-6xl mx-auto px-4 py-4 sm:py-8">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6 sm:mb-8">
+        <h1 className="text-2xl sm:text-3xl font-bold text-fantasy-text">游戏大厅</h1>
         <Link
           href="/games/new"
-          className="bg-fantasy-accent hover:bg-fantasy-accent/80 text-white px-6 py-2 rounded-lg transition-colors"
+          className="bg-fantasy-accent hover:bg-fantasy-accent/80 text-white px-4 sm:px-6 py-2 rounded-lg transition-colors text-sm sm:text-base"
         >
           创建新游戏
         </Link>
       </div>
 
-      <div className="flex space-x-4 mb-6">
+      <div className="flex space-x-2 sm:space-x-4 mb-4 sm:mb-6 overflow-x-auto">
         <button
           onClick={() => setScope("public")}
           className={`px-4 py-2 rounded-lg text-sm transition-colors ${

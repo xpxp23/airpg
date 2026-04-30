@@ -48,19 +48,19 @@ export function ActionInput({ pendingAction, onSubmit, onCancel }: ActionInputPr
 
   if (pendingAction) {
     return (
-      <div className="bg-fantasy-card/60 backdrop-blur-sm border-t border-fantasy-accent/10 px-4 py-3">
+      <div className="bg-fantasy-card/60 backdrop-blur-sm border-t border-fantasy-accent/10 px-3 sm:px-4 py-2.5 sm:py-3 safe-area-bottom">
         <div className="flex items-center justify-between mb-2">
           <div className="min-w-0 flex-1">
-            <div className="text-xs text-fantasy-accent/70 mb-1">⏳ 行动进行中</div>
-            <div className="text-fantasy-text text-sm truncate">
+            <div className="text-[10px] sm:text-xs text-fantasy-accent/70 mb-1">⏳ 行动进行中</div>
+            <div className="text-fantasy-text text-xs sm:text-sm truncate">
               {pendingAction.public_snippet}
             </div>
           </div>
-          <div className="shrink-0 text-right ml-4">
-            <div className="text-xl font-bold text-fantasy-accent tabular-nums">
+          <div className="shrink-0 text-right ml-3 sm:ml-4">
+            <div className="text-lg sm:text-xl font-bold text-fantasy-accent tabular-nums">
               {Math.floor(remaining / 60)}:{(remaining % 60).toString().padStart(2, "0")}
             </div>
-            <div className="text-[10px] text-fantasy-muted/50">剩余</div>
+            <div className="text-[9px] sm:text-[10px] text-fantasy-muted/50">剩余</div>
           </div>
         </div>
         <div className="w-full bg-fantasy-bg/50 rounded-full h-1.5 mb-2">
@@ -79,7 +79,7 @@ export function ActionInput({ pendingAction, onSubmit, onCancel }: ActionInputPr
         </div>
         <button
           onClick={() => onCancel(pendingAction.id)}
-          className="text-fantasy-muted/50 hover:text-fantasy-accent text-xs transition-colors"
+          className="text-fantasy-muted/50 hover:text-fantasy-accent text-[10px] sm:text-xs transition-colors"
         >
           取消行动
         </button>
@@ -88,22 +88,22 @@ export function ActionInput({ pendingAction, onSubmit, onCancel }: ActionInputPr
   }
 
   return (
-    <div className="bg-fantasy-card/60 backdrop-blur-sm border-t border-fantasy-accent/10 px-4 py-3">
+    <div className="bg-fantasy-card/60 backdrop-blur-sm border-t border-fantasy-accent/10 px-3 sm:px-4 py-2.5 sm:py-3 safe-area-bottom">
       <form onSubmit={handleSubmit} className="flex gap-2">
         <input
           type="text"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          className="flex-1 bg-fantasy-bg/50 border border-fantasy-accent/20 rounded-lg px-4 py-2.5 text-sm text-fantasy-text placeholder-fantasy-muted/40 focus:outline-none focus:border-fantasy-accent/40 transition-colors"
-          placeholder="描述你的行动...（如：搜索书桌抽屉、与守卫交谈）"
+          className="flex-1 bg-fantasy-bg/50 border border-fantasy-accent/20 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-sm text-fantasy-text placeholder-fantasy-muted/40 focus:outline-none focus:border-fantasy-accent/40 transition-colors"
+          placeholder="描述你的行动..."
           disabled={loading}
         />
         <button
           type="submit"
           disabled={loading || !text.trim()}
-          className="bg-fantasy-accent hover:bg-fantasy-accent/80 disabled:bg-fantasy-accent/40 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors"
+          className="bg-fantasy-accent hover:bg-fantasy-accent/80 disabled:bg-fantasy-accent/40 text-white px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg text-sm font-medium transition-colors shrink-0"
         >
-          {loading ? "提交中..." : "行动"}
+          {loading ? "..." : "行动"}
         </button>
       </form>
     </div>

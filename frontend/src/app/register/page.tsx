@@ -26,13 +26,13 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4">
+    <div className="min-h-[calc(100dvh-4rem)] flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-md">
-        <div className="bg-fantasy-card/80 backdrop-blur-sm rounded-2xl p-8 border border-fantasy-accent/10">
-          <h1 className="text-3xl font-bold text-center mb-2 bg-gradient-to-r from-fantasy-accent to-fantasy-gold bg-clip-text text-transparent">
+        <div className="bg-fantasy-card/80 backdrop-blur-sm rounded-2xl p-5 sm:p-8 border border-fantasy-accent/10">
+          <h1 className="text-2xl sm:text-3xl font-bold text-center mb-2 bg-gradient-to-r from-fantasy-accent to-fantasy-gold bg-clip-text text-transparent">
             创建账号
           </h1>
-          <p className="text-fantasy-muted text-center mb-8">
+          <p className="text-fantasy-muted text-center mb-6 sm:mb-8 text-sm sm:text-base">
             加入 AI 叙事跑团，开始你的冒险之旅
           </p>
 
@@ -42,7 +42,7 @@ export default function RegisterPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
             <div>
               <label className="block text-sm font-medium text-fantasy-muted mb-2">
                 用户名

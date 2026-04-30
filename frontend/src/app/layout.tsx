@@ -11,6 +11,13 @@ export const metadata: Metadata = {
   description: "AI 驱动的多人异步叙事跑团游戏",
 };
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{

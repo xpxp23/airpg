@@ -42,15 +42,15 @@ export default function NewGamePage() {
 
   if (authLoading || !user) {
     return (
-      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
+      <div className="min-h-[calc(100dvh-4rem)] flex items-center justify-center">
         <div className="text-fantasy-muted">加载中...</div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-8 bg-gradient-to-r from-fantasy-accent to-fantasy-gold bg-clip-text text-transparent">
+    <div className="max-w-4xl mx-auto px-4 py-4 sm:py-8">
+      <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-8 bg-gradient-to-r from-fantasy-accent to-fantasy-gold bg-clip-text text-transparent">
         创建新游戏
       </h1>
 
@@ -60,7 +60,7 @@ export default function NewGamePage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
         <div>
           <label className="block text-sm font-medium text-fantasy-muted mb-2">
             游戏标题（可选）
@@ -90,7 +90,7 @@ export default function NewGamePage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
           <div>
             <label className="block text-sm font-medium text-fantasy-muted mb-2">
               目标时长
@@ -159,8 +159,8 @@ export default function NewGamePage() {
           </div>
         </div>
 
-        <div className="bg-fantasy-card/30 rounded-xl p-6 border border-fantasy-accent/10">
-          <h3 className="text-lg font-semibold text-fantasy-text mb-2">  AI 将会...</h3>
+        <div className="bg-fantasy-card/30 rounded-xl p-4 sm:p-6 border border-fantasy-accent/10">
+          <h3 className="text-base sm:text-lg font-semibold text-fantasy-text mb-2">  AI 将会...</h3>
           <ul className="space-y-2 text-fantasy-muted text-sm">
             <li className="flex items-start">
               <span className="text-fantasy-accent mr-2">•</span>

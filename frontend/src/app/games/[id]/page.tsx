@@ -219,9 +219,9 @@ export default function GameRoomPage() {
     const hasCharacter = characters.some((c) => c.player_id === user.id);
 
     return (
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="bg-fantasy-card/60 backdrop-blur-sm rounded-2xl p-8 border border-fantasy-accent/10">
-          <h1 className="text-3xl font-bold mb-2 text-fantasy-text">
+      <div className="max-w-4xl mx-auto px-4 py-4 sm:py-8">
+        <div className="bg-fantasy-card/60 backdrop-blur-sm rounded-2xl p-4 sm:p-8 border border-fantasy-accent/10">
+          <h1 className="text-2xl sm:text-3xl font-bold mb-2 text-fantasy-text">
             {game.title || "准备中..."}
           </h1>
 
@@ -304,14 +304,14 @@ export default function GameRoomPage() {
             </div>
           )}
 
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold text-fantasy-text mb-4">
+          <div className="mb-4 sm:mb-6">
+            <h2 className="text-base sm:text-lg font-semibold text-fantasy-text mb-3 sm:mb-4">
               选择角色 ({characters.filter((c) => c.player_id).length}/{game.max_players})
             </h2>
             {game.parse_status !== "completed" ? (
               <p className="text-fantasy-muted text-sm">等待 AI 解析完成后可选择角色...</p>
             ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
               {presetChars.map((pc) => {
                 const charId = pc.db_id || pc.id;
                 const dbChar = characters.find((c) => c.id === charId);
@@ -400,31 +400,31 @@ export default function GameRoomPage() {
 
   // Active game state
   return (
-    <div className="flex h-[calc(100vh-4rem)]">
+    <div className="flex h-[100dvh] md:h-[calc(100vh-4rem)]">
       {/* Main chat area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         {/* Game header */}
-        <div className="bg-fantasy-card/60 backdrop-blur-sm border-b border-fantasy-accent/10 px-4 py-2.5 flex items-center justify-between">
-          <div className="min-w-0">
-            <h1 className="text-base font-semibold text-fantasy-text truncate">
+        <div className="bg-fantasy-card/60 backdrop-blur-sm border-b border-fantasy-accent/10 px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-sm sm:text-base font-semibold text-fantasy-text truncate">
               {game.title || "游戏进行中"}
             </h1>
-            <div className="text-xs text-fantasy-muted/60">
+            <div className="text-[10px] sm:text-xs text-fantasy-muted/60">
               第 {game.current_chapter} 章 · {characters.filter((c) => c.is_alive).length} 名冒险者存活
             </div>
           </div>
-          <div className="shrink-0 flex items-center gap-2">
+          <div className="shrink-0 flex items-center gap-1.5 sm:gap-2 ml-2">
             {game.creator_id === user.id && (
               <button
                 onClick={handleEndGame}
-                className="bg-red-500/10 hover:bg-red-500/20 text-red-400 px-3 py-1.5 rounded-lg text-xs transition-colors"
+                className="bg-red-500/10 hover:bg-red-500/20 text-red-400 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs transition-colors"
               >
-                结束本局
+                结束
               </button>
             )}
             <button
               onClick={() => setShowCharacters(!showCharacters)}
-              className="bg-fantasy-card hover:bg-fantasy-card/80 text-fantasy-text/80 px-3 py-1.5 rounded-lg text-xs transition-colors"
+              className="bg-fantasy-card hover:bg-fantasy-card/80 text-fantasy-text/80 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs transition-colors"
             >
                角色
             </button>
@@ -432,7 +432,7 @@ export default function GameRoomPage() {
         </div>
 
         {/* Events stream */}
-        <div className="flex-1 overflow-y-auto px-4 py-6 space-y-3">
+        <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 sm:py-6 space-y-2 sm:space-y-3">
           {sortedEvents.map((event) => {
             const display = getEventDisplay(event);
             const time = new Date(event.timestamp).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
@@ -451,13 +451,13 @@ export default function GameRoomPage() {
             // Narrative results: card with rich text
             if (display.isNarrative) {
               return (
-                <div key={event.id} className="message-enter bg-fantasy-card/40 rounded-xl p-5 border border-fantasy-accent/10">
-                  <div className="flex items-center gap-2 mb-3">
+                <div key={event.id} className="message-enter bg-fantasy-card/40 rounded-xl p-3 sm:p-5 border border-fantasy-accent/10">
+                  <div className="flex items-center gap-2 mb-2 sm:mb-3">
                     <span className="text-sm">{display.icon}</span>
-                    <span className="font-semibold text-fantasy-accent text-sm">{display.characterName}</span>
-                    <span className="text-fantasy-muted/40 text-xs ml-auto tabular-nums">{time}</span>
+                    <span className="font-semibold text-fantasy-accent text-xs sm:text-sm">{display.characterName}</span>
+                    <span className="text-fantasy-muted/40 text-[10px] sm:text-xs ml-auto tabular-nums">{time}</span>
                   </div>
-                  <p className="text-fantasy-text/90 text-[15px] leading-[1.8] whitespace-pre-line">
+                  <p className="text-fantasy-text/90 text-[13px] sm:text-[15px] leading-[1.7] sm:leading-[1.8] whitespace-pre-line">
                     {display.content}
                   </p>
                 </div>

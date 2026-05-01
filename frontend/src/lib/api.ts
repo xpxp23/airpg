@@ -124,9 +124,12 @@ class ApiClient {
     });
   }
 
-  async getEvents(gameId: string, since?: string): Promise<{ events: GameEvent[]; has_more: boolean }> {
-    const params = since ? `?since=${since}` : "";
-    return this.request(`/games/${gameId}/events${params}`);
+  async getEvents(gameId: string, since?: string, limit?: number): Promise<{ events: GameEvent[]; has_more: boolean }> {
+    const params = new URLSearchParams();
+    if (since) params.set("since", since);
+    if (limit) params.set("limit", String(limit));
+    const qs = params.toString();
+    return this.request(`/games/${gameId}/events${qs ? `?${qs}` : ""}`);
   }
 
   async getCharacters(gameId: string): Promise<Character[]> {

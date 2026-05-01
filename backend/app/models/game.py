@@ -50,7 +50,7 @@ class Game(Base):
     compressed_memory: Mapped[str | None] = mapped_column(Text, nullable=True)
     memory_event_count: Mapped[int] = mapped_column(Integer, default=0)
     last_memory_compress_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    invite_code: Mapped[str | None] = mapped_column(String(8), unique=True, nullable=True)
+    story_recap: Mapped[str | None] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

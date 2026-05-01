@@ -21,7 +21,6 @@ export interface Game {
   max_players: number;
   is_public: boolean;
   game_mode: "waiting" | "instant";
-  invite_code?: string;
   started_at?: string;
   finished_at?: string;
   created_at: string;
@@ -32,6 +31,7 @@ export interface Game {
   parse_error?: string;
   duration_hint?: string;
   target_duration_minutes?: number;
+  story_recap?: string;
 }
 
 export interface AISummary {

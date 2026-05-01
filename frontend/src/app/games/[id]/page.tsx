@@ -34,6 +34,8 @@ export default function GameRoomPage() {
   const [joining, setJoining] = useState(false);
   const [starting, setStarting] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [allEvents, setAllEvents] = useState<GameEvent[]>([]);
+  const [loadingAllEvents, setLoadingAllEvents] = useState(false);
   const eventsEndRef = useRef<HTMLDivElement>(null);
   const eventsContainerRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
@@ -123,6 +125,19 @@ export default function GameRoomPage() {
       alert(err.message);
     }
   };
+
+  // Load all events for summary view
+  useEffect(() => {
+    if ((game?.status === "finished" || game?.status === "abandoned") && allEvents.length === 0) {
+      setLoadingAllEvents(true);
+      api.getEvents(gameId, undefined, 9999)
+        .then((res) => {
+          setAllEvents(res.events || []);
+        })
+        .catch(() => {})
+        .finally(() => setLoadingAllEvents(false));
+    }
+  }, [game?.status, gameId]);
 
   const getEventDisplay = (event: GameEvent) => {
     const { type, data } = event;
@@ -310,10 +325,6 @@ export default function GameRoomPage() {
               </div>
             </div>
           )}
-          <p className="text-fantasy-muted mb-6">
-            邀请码：<span className="text-fantasy-accent font-mono">{game.invite_code}</span>
-          </p>
-
           {game.ai_summary && (
             <div className="bg-fantasy-bg/30 rounded-xl p-6 mb-6">
               <h2 className="text-lg font-semibold text-fantasy-text mb-3">  故事简介</h2>
@@ -417,6 +428,159 @@ export default function GameRoomPage() {
               </button>
             </div>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  // Finished / Abandoned game — summary view
+  if (game.status === "finished" || game.status === "abandoned") {
+    const sortedAllEvents = [...allEvents].sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+
+    const gameDuration = game.started_at && game.finished_at
+      ? Math.round((new Date(game.finished_at).getTime() - new Date(game.started_at).getTime()) / 60000)
+      : null;
+
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-4 sm:py-8">
+        <div className="bg-fantasy-card/60 backdrop-blur-sm rounded-2xl p-4 sm:p-8 border border-fantasy-accent/10">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-fantasy-text">
+                {game.title || "冒险结束"}
+              </h1>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-fantasy-muted mt-2">
+                {game.status === "finished" ? (
+                  <span className="text-green-400">故事落幕</span>
+                ) : (
+                  <span className="text-yellow-400">已解散</span>
+                )}
+                {gameDuration !== null && <span>时长 {gameDuration} 分钟</span>}
+                <span>第 {game.current_chapter} 章</span>
+              </div>
+            </div>
+            <button
+              onClick={() => router.push("/games")}
+              className="bg-fantasy-accent hover:bg-fantasy-accent/80 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+            >
+              返回游戏列表
+            </button>
+          </div>
+
+          {/* Story Recap */}
+          {game.story_recap && (
+            <div className="bg-fantasy-bg/30 rounded-xl p-6 mb-6">
+              <h2 className="text-lg font-semibold text-fantasy-text mb-3">  故事回顾</h2>
+              <p className="text-fantasy-text/80 text-[15px] leading-[1.8] whitespace-pre-line">
+                {game.story_recap}
+              </p>
+            </div>
+          )}
+          {game.status === "finished" && !game.story_recap && (
+            <div className="bg-fantasy-bg/30 rounded-xl p-6 mb-6">
+              <h2 className="text-lg font-semibold text-fantasy-text mb-3">  故事回顾</h2>
+              <p className="text-fantasy-muted text-sm">AI 正在生成故事回顾，请稍后刷新页面...</p>
+            </div>
+          )}
+
+          {/* Character Final Status */}
+          {characters.length > 0 && (
+            <div className="bg-fantasy-bg/30 rounded-xl p-6 mb-6">
+              <h2 className="text-lg font-semibold text-fantasy-text mb-3">  角色最终状态</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {characters.map((c) => (
+                  <div
+                    key={c.id}
+                    className={`p-4 rounded-lg border ${
+                      c.is_alive
+                        ? "border-green-500/20 bg-green-500/5"
+                        : "border-red-500/20 bg-red-500/5"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-semibold text-fantasy-text">{c.name}</span>
+                      <span className={`text-xs ${c.is_alive ? "text-green-400" : "text-red-400"}`}>
+                        {c.is_alive ? "存活" : "死亡"}
+                      </span>
+                    </div>
+                    {c.location && (
+                      <p className="text-xs text-fantasy-muted">位置：{c.location}</p>
+                    )}
+                    {c.status_effects?.health !== undefined && (
+                      <p className="text-xs text-fantasy-muted">生命值：{c.status_effects.health}</p>
+                    )}
+                    {c.status_effects?.items && c.status_effects.items.length > 0 && (
+                      <p className="text-xs text-fantasy-muted">物品：{c.status_effects.items.join("、")}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Full Event Timeline */}
+          <div className="bg-fantasy-bg/30 rounded-xl p-6">
+            <h2 className="text-lg font-semibold text-fantasy-text mb-3">  完整事件时间线</h2>
+            {loadingAllEvents ? (
+              <p className="text-fantasy-muted text-sm">加载事件记录中...</p>
+            ) : sortedAllEvents.length === 0 ? (
+              <p className="text-fantasy-muted text-sm">暂无事件记录</p>
+            ) : (
+              <div className="max-h-[60vh] overflow-y-auto space-y-2 pr-2">
+                {sortedAllEvents.map((event) => {
+                  const display = getEventDisplay(event);
+                  const time = new Date(event.timestamp).toLocaleString("zh-CN", {
+                    month: "2-digit",
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  });
+
+                  if (display.isNarrative) {
+                    return (
+                      <div key={event.id} className="bg-fantasy-card/40 rounded-lg p-3 border border-fantasy-accent/10">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm">{display.icon}</span>
+                          <span className="font-semibold text-fantasy-accent text-xs">{display.characterName}</span>
+                          <span className="text-fantasy-muted/40 text-[10px] ml-auto tabular-nums">{time}</span>
+                        </div>
+                        <p className="text-fantasy-text/80 text-[13px] leading-[1.7] whitespace-pre-line">
+                          {display.content}
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  if (display.isAction) {
+                    return (
+                      <div key={event.id} className="bg-fantasy-accent/5 rounded-lg p-3 border border-fantasy-accent/15">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm">{display.icon}</span>
+                          <span className="font-semibold text-fantasy-accent/90 text-xs">{display.characterName}</span>
+                          <span className="text-fantasy-muted/40 text-[10px] ml-auto tabular-nums">{time}</span>
+                        </div>
+                        {display.actionText && (
+                          <p className="text-fantasy-text/80 text-xs mb-1">「{display.actionText}」</p>
+                        )}
+                        <p className="text-fantasy-muted/50 text-[11px]">{display.content}</p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={event.id} className="flex items-start gap-2 text-fantasy-muted/70 text-xs py-1">
+                      <span className="shrink-0 mt-0.5">{display.icon}</span>
+                      <span>{display.content}</span>
+                      <span className="shrink-0 ml-auto text-fantasy-muted/40 tabular-nums">{time}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );

@@ -1,6 +1,4 @@
 import uuid
-import string
-import random
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,10 +12,6 @@ class GameService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.ai_service = AIService()
-
-    def _generate_invite_code(self) -> str:
-        chars = string.ascii_uppercase + string.digits
-        return "".join(random.choices(chars, k=6))
 
     async def create_game(self, creator_id: str, data: GameCreate) -> Game:
         # Parse duration hint to minutes
@@ -33,7 +27,6 @@ class GameService:
             max_players=data.max_players,
             is_public=data.is_public,
             game_mode=data.game_mode,
-            invite_code=self._generate_invite_code(),
             parse_status=ParseStatus.PENDING,
         )
         self.db.add(game)
@@ -382,4 +375,101 @@ class GameService:
         )
         self.db.add(event)
         await self.db.commit()
+
+        # Generate story recap in background
+        import asyncio
+        asyncio.create_task(self._generate_story_recap(game_id))
+
         return game
+
+    async def _generate_story_recap(self, game_id: str) -> None:
+        """Generate an AI story recap after game ends."""
+        try:
+            from app.database import async_session
+            async with async_session() as db:
+                # Reload game in new session
+                result = await db.execute(select(Game).where(Game.id == game_id))
+                game = result.scalar_one_or_none()
+                if not game:
+                    return
+
+                # Gather events for recap
+                events_result = await db.execute(
+                    select(Event)
+                    .where(Event.game_id == game_id, Event.is_visible == True)
+                    .order_by(Event.timestamp.asc())
+                )
+                events = list(events_result.scalars().all())
+
+                # Build event summary
+                event_lines = []
+                for e in events:
+                    d = e.data or {}
+                    if e.type.value == "action_result":
+                        event_lines.append(f"[{e.type.value}] {d.get('character_name', '')}: {d.get('narrative', '')[:200]}")
+                    elif e.type.value == "game_start":
+                        event_lines.append(f"[开场] {d.get('narrative', '')[:200]}")
+                    elif e.type.value == "game_end":
+                        event_lines.append(f"[结束] {d.get('reason', '')}")
+                    elif e.type.value == "chapter_advance":
+                        event_lines.append(f"[章节推进] 第{d.get('chapter', '?')}章: {d.get('description', '')}")
+                    elif e.type.value == "player_join":
+                        event_lines.append(f"[加入] {d.get('character_name', '')}")
+                    else:
+                        snippet = d.get("public_snippet") or d.get("narrative") or d.get("message") or str(d)[:100]
+                        event_lines.append(f"[{e.type.value}] {snippet}")
+
+                events_text = "\n".join(event_lines[-100:])  # Last 100 events
+
+                # Get characters
+                chars_result = await db.execute(
+                    select(Character).where(Character.game_id == game_id)
+                )
+                characters = list(chars_result.scalars().all())
+                chars_text = "\n".join(
+                    f"- {c.name}: {'存活' if c.is_alive else '死亡'}, 位置={c.location or '未知'}"
+                    for c in characters
+                )
+
+                # Use compressed memory if available, otherwise use events
+                memory = game.compressed_memory or ""
+
+                prompt = f"""你是一个跑团记录员。游戏已经结束，请根据以下信息生成一段精彩的故事回顾总结（300-600字）。
+
+故事标题：{game.title or '未命名冒险'}
+故事背景摘要：{memory[:500] if memory else '无'}
+
+完整事件记录：
+{events_text}
+
+角色最终状态：
+{chars_text}
+
+结束原因：游戏已结束
+
+请生成一段引人入胜的故事回顾，像小说的结尾章节一样。重点描述：
+1. 冒险的开端和核心冲突
+2. 过程中的关键时刻和转折
+3. 最终的结局
+4. 各角色的命运
+
+以纯文本形式返回，不要使用 JSON。"""
+
+                from app.services.ai_service import AIService
+                ai = AIService()
+                recap = await ai.call_text(
+                    system_prompt="你是一个才华横溢的故事记录员，擅长将游戏过程编织成精彩的故事回顾。",
+                    user_prompt=prompt,
+                    temperature=0.7,
+                    premium=True,
+                )
+
+                # Save recap
+                result2 = await db.execute(select(Game).where(Game.id == game_id))
+                game2 = result2.scalar_one_or_none()
+                if game2:
+                    game2.story_recap = recap
+                    await db.commit()
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("Failed to generate story recap for game %s", game_id)

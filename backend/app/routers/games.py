@@ -27,7 +27,6 @@ def _game_to_response(game, player_count: int = 0) -> GameResponse:
         max_players=game.max_players,
         is_public=game.is_public,
         game_mode=game.game_mode,
-        invite_code=game.invite_code,
         started_at=game.started_at,
         finished_at=game.finished_at,
         created_at=game.created_at,
@@ -97,7 +96,6 @@ async def get_game(
         max_players=game.max_players,
         is_public=game.is_public,
         game_mode=game.game_mode,
-        invite_code=game.invite_code,
         started_at=game.started_at,
         finished_at=game.finished_at,
         created_at=game.created_at,
@@ -107,6 +105,7 @@ async def get_game(
         parse_error=game.parse_error,
         duration_hint=game.duration_hint,
         target_duration_minutes=game.target_duration_minutes,
+        story_recap=game.story_recap,
         player_count=player_count,
     )
 
@@ -202,7 +201,7 @@ async def end_game(
 async def get_events(
     game_id: str,
     since: datetime | None = Query(None),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(50, ge=1, le=9999),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

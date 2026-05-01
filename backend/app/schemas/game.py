@@ -25,7 +25,6 @@ class GameResponse(BaseModel):
     max_players: int
     is_public: bool
     game_mode: str = "waiting"
-    invite_code: str | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
     created_at: datetime
@@ -43,6 +42,7 @@ class GameDetailResponse(GameResponse):
     parse_error: str | None = None
     duration_hint: str | None = None
     target_duration_minutes: int | None = None
+    story_recap: str | None = None
 
 
 class GameStart(BaseModel):

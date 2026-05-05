@@ -15,7 +15,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.execute("ALTER TYPE eventtype ADD VALUE IF NOT EXISTS 'midgame_join'")
+    op.execute("""
+DO $$
+BEGIN
+    ALTER TYPE eventtype ADD VALUE 'midgame_join';
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END;
+$$""")
 
 
 def downgrade() -> None:

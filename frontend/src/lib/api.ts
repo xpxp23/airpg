@@ -240,6 +240,13 @@ class ApiClient {
       headers: { "X-Admin-Token": adminToken },
     });
   }
+
+  async adminDeleteEndedGames(adminToken: string): Promise<{ deleted: number }> {
+    return this.request("/admin/games/ended", {
+      method: "DELETE",
+      headers: { "X-Admin-Token": adminToken },
+    });
+  }
 }
 
 export const api = new ApiClient();

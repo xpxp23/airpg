@@ -255,6 +255,23 @@ async def admin_close_game(
     return {"message": "房间已关闭"}
 
 
+@router.delete("/games/ended")
+async def admin_delete_ended_games(
+    _: None = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete all finished/abandoned games. Admin only."""
+    result = await db.execute(
+        select(Game).where(Game.status.in_([GameStatus.FINISHED, GameStatus.ABANDONED]))
+    )
+    games = result.scalars().all()
+    count = len(games)
+    for game in games:
+        await db.delete(game)
+    await db.commit()
+    return {"deleted": count}
+
+
 @router.delete("/games/{game_id}", status_code=204)
 async def admin_delete_game(
     game_id: str,

@@ -220,6 +220,25 @@ export default function AdminPage() {
     }
   }
 
+  async function handleDeleteEndedGames() {
+    const endedCount = games.filter((g) => g.status === "finished" || g.status === "abandoned").length;
+    if (endedCount === 0) {
+      alert("没有已结束或已废弃的房间");
+      return;
+    }
+    if (!confirm(`确定要一键删除 ${endedCount} 个已结束/已废弃的房间吗？此操作不可撤销。`)) return;
+    setGameActionLoading("batch");
+    try {
+      const result = await api.adminDeleteEndedGames(adminToken!);
+      alert(`已删除 ${result.deleted} 个房间`);
+      loadGames();
+    } catch (err: any) {
+      alert(err.message || "批量删除失败");
+    } finally {
+      setGameActionLoading(null);
+    }
+  }
+
   // Password gate
   if (!adminToken) {
     return (
@@ -684,14 +703,26 @@ export default function AdminPage() {
         <div className="bg-fantasy-card/80 backdrop-blur-sm rounded-2xl p-6 border border-fantasy-accent/10 space-y-5">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-fantasy-text">  房间管理</h2>
-            <button
-              type="button"
-              onClick={loadGames}
-              disabled={loadingGames}
-              className="text-fantasy-muted hover:text-fantasy-accent text-sm transition-colors"
-            >
-              {loadingGames ? "刷新中..." : "刷新"}
-            </button>
+            <div className="flex gap-2">
+              {games.some((g) => g.status === "finished" || g.status === "abandoned") && (
+                <button
+                  type="button"
+                  onClick={handleDeleteEndedGames}
+                  disabled={gameActionLoading === "batch"}
+                  className="text-red-400 hover:text-red-300 text-sm transition-colors disabled:opacity-50"
+                >
+                  {gameActionLoading === "batch" ? "清理中..." : "一键清理已结束"}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={loadGames}
+                disabled={loadingGames}
+                className="text-fantasy-muted hover:text-fantasy-accent text-sm transition-colors"
+              >
+                {loadingGames ? "刷新中..." : "刷新"}
+              </button>
+            </div>
           </div>
 
           {games.length === 0 ? (

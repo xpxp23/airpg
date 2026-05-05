@@ -208,7 +208,7 @@ export default function AdminPage() {
   }
 
   async function handleDeleteGame(gameId: string, gameTitle: string) {
-    if (!confirm(`确定要废弃「${gameTitle || '未命名游戏'}」吗？此操作不可撤销。`)) return;
+    if (!confirm(`确定要删除「${gameTitle || '未命名游戏'}」吗？此操作不可撤销。`)) return;
     setGameActionLoading(gameId);
     try {
       await api.adminDeleteGame(adminToken!, gameId);
@@ -743,7 +743,7 @@ export default function AdminPage() {
                               disabled={gameActionLoading === g.id}
                               className="text-red-400 hover:text-red-300 text-xs disabled:opacity-50"
                             >
-                              废弃
+                              删除
                             </button>
                           )}
                         </div>

@@ -1,4 +1,4 @@
-import { Token, Game, Character, GameAction, GameEvent, AdminSettings } from "@/types";
+import { Token, Game, Character, GameAction, GameEvent, AdminSettings, AdminGameInfo } from "@/types";
 
 const API_BASE = "/api/v1";
 
@@ -211,6 +211,34 @@ class ApiClient {
 
   async getAdminDefaultPrompts(): Promise<Record<string, string>> {
     return this.request("/admin/prompts/defaults");
+  }
+
+  async changeAdminPassword(adminToken: string, oldPassword: string, newPassword: string): Promise<{ message: string }> {
+    return this.request("/admin/password", {
+      method: "PUT",
+      body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
+      headers: { "X-Admin-Token": adminToken },
+    });
+  }
+
+  async adminListGames(adminToken: string): Promise<AdminGameInfo[]> {
+    return this.request("/admin/games", {
+      headers: { "X-Admin-Token": adminToken },
+    });
+  }
+
+  async adminCloseGame(adminToken: string, gameId: string): Promise<{ message: string }> {
+    return this.request(`/admin/games/${gameId}/close`, {
+      method: "POST",
+      headers: { "X-Admin-Token": adminToken },
+    });
+  }
+
+  async adminDeleteGame(adminToken: string, gameId: string): Promise<void> {
+    return this.request(`/admin/games/${gameId}`, {
+      method: "DELETE",
+      headers: { "X-Admin-Token": adminToken },
+    });
   }
 }
 

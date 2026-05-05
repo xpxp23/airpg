@@ -20,6 +20,7 @@ class EventType(str, enum.Enum):
     CHAPTER_ADVANCE = "chapter_advance"
     SYSTEM_MESSAGE = "system_message"
     AI_NARRATIVE = "ai_narrative"
+    MIDGAME_JOIN = "midgame_join"
 
 
 class Event(Base):

@@ -179,3 +179,16 @@ def get_current_admin_settings() -> dict:
 @lru_cache()
 def get_settings() -> Settings:
     return Settings()
+
+
+def get_admin_password_raw() -> str:
+    """Get the current admin password (raw, for HMAC verification)."""
+    overrides = load_admin_overrides()
+    return overrides.get("ADMIN_PASSWORD", "rpgadmin")
+
+
+def set_admin_password(new_password: str) -> None:
+    """Store a new admin password."""
+    current = load_admin_overrides()
+    current["ADMIN_PASSWORD"] = new_password
+    save_admin_overrides(current)

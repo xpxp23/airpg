@@ -162,6 +162,12 @@ export default function GameRoomPage() {
           isSystem: true,
           icon: " ",
         };
+      case "midgame_join":
+        return {
+          content: `${data.character_name} 在冒险中途加入了队伍`,
+          isSystem: true,
+          icon: " ",
+        };
       case "action_start":
         return {
           content: data.public_snippet || `${data.character_name} 开始行动`,
@@ -581,6 +587,87 @@ export default function GameRoomPage() {
               </div>
             )}
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Active game - mid-game join UI for users without a character
+  if (game.status === "active" && !myCharacter) {
+    const presetChars = game.ai_summary?.preset_characters || [];
+    const unclaimedChars = presetChars.filter((pc) => {
+      const charId = pc.db_id || pc.id;
+      const dbChar = characters.find((c) => c.id === charId);
+      return !dbChar || !dbChar.player_id;
+    });
+
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-4 sm:py-8">
+        <div className="bg-fantasy-card/60 backdrop-blur-sm rounded-2xl p-4 sm:p-8 border border-fantasy-accent/10">
+          <h1 className="text-2xl sm:text-3xl font-bold text-fantasy-text mb-2">
+            {game.title || "冒险进行中"}
+          </h1>
+          <p className="text-fantasy-muted text-sm mb-6">
+            这局游戏已经开始了！你可以中途加入，选择一个角色或创建自定义角色。
+          </p>
+
+          {/* Game state summary */}
+          <div className="bg-fantasy-bg/30 rounded-xl p-4 mb-6">
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-fantasy-muted">
+              <span>第 {game.current_chapter} 章</span>
+              <span>{characters.filter((c) => c.player_id && c.is_alive).length} 名冒险者存活</span>
+              <span>{characters.filter((c) => c.player_id).length}/{game.max_players} 已加入</span>
+            </div>
+            {game.ai_summary?.initial_state?.narrative && (
+              <p className="text-fantasy-text/70 text-sm mt-3 leading-relaxed">
+                {game.ai_summary.initial_state.narrative.substring(0, 200)}...
+              </p>
+            )}
+          </div>
+
+          {/* Available preset characters */}
+          {unclaimedChars.length > 0 && (
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold text-fantasy-text mb-3">
+                可选角色 ({unclaimedChars.length} 个空位)
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {unclaimedChars.map((pc) => {
+                  const charId = pc.db_id || pc.id;
+                  return (
+                    <button
+                      key={charId}
+                      onClick={() => handleJoin(charId)}
+                      disabled={joining}
+                      className="p-4 rounded-xl border border-fantasy-accent/20 hover:border-fantasy-accent/50 text-left transition-all"
+                    >
+                      <div className="font-semibold text-fantasy-text">{pc.name}</div>
+                      <div className="text-sm text-fantasy-muted mt-1">{pc.description}</div>
+                      <div className="text-xs text-fantasy-muted/60 mt-2">
+                        技能：{pc.skills?.join("、") || "无特殊技能"}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Custom character option */}
+          <div className="mb-4">
+            <h3 className="text-md font-semibold text-fantasy-text mb-2">或自创角色</h3>
+            <button
+              onClick={() => handleJoin()}
+              disabled={joining}
+              className="bg-fantasy-card hover:bg-fantasy-card/80 disabled:opacity-50 border border-fantasy-accent/20 text-fantasy-text px-6 py-3 rounded-lg transition-colors"
+            >
+              {joining ? "加入中..." : "创建自定义角色加入"}
+            </button>
+          </div>
+
+          <p className="text-xs text-fantasy-muted/50 mt-4">
+            中途加入的角色将以当前章节的场景为起点开始冒险
+          </p>
         </div>
       </div>
     );

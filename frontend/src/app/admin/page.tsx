@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
-import { AdminSettings } from "@/types";
+import { AdminSettings, AdminGameInfo } from "@/types";
 
 const PROMPT_FIELDS = [
   {
@@ -48,6 +48,20 @@ export default function AdminPage() {
   const [defaultPrompts, setDefaultPrompts] = useState<Record<string, string>>({});
   const [expandedPrompt, setExpandedPrompt] = useState<string | null>(null);
 
+  // Password change state
+  const [showPasswordChange, setShowPasswordChange] = useState(false);
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  // Room management state
+  const [games, setGames] = useState<AdminGameInfo[]>([]);
+  const [loadingGames, setLoadingGames] = useState(false);
+  const [gameActionLoading, setGameActionLoading] = useState<string | null>(null);
+
   useEffect(() => {
     const stored = sessionStorage.getItem("admin_token");
     if (stored) {
@@ -59,6 +73,7 @@ export default function AdminPage() {
     if (adminToken) {
       loadSettings();
       loadDefaults();
+      loadGames();
     }
   }, [adminToken]);
 
@@ -135,6 +150,74 @@ export default function AdminPage() {
   function resetPrompt(key: string) {
     if (!settings || !defaultPrompts[key]) return;
     setSettings({ ...settings, [key]: defaultPrompts[key] });
+  }
+
+  async function loadGames() {
+    if (!adminToken) return;
+    setLoadingGames(true);
+    try {
+      const data = await api.adminListGames(adminToken);
+      setGames(data);
+    } catch (err: any) {
+      console.error("Failed to load games:", err);
+    } finally {
+      setLoadingGames(false);
+    }
+  }
+
+  async function handlePasswordChange(e: React.FormEvent) {
+    e.preventDefault();
+    setPasswordError("");
+    setPasswordSuccess("");
+    if (newPassword !== confirmPassword) {
+      setPasswordError("两次输入的新密码不一致");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordError("密码长度不能少于6位");
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      await api.changeAdminPassword(adminToken!, oldPassword, newPassword);
+      setPasswordSuccess("密码修改成功，即将退出登录...");
+      setOldPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setTimeout(() => {
+        handleLogout();
+      }, 2000);
+    } catch (err: any) {
+      setPasswordError(err.message || "修改失败");
+    } finally {
+      setChangingPassword(false);
+    }
+  }
+
+  async function handleCloseGame(gameId: string, gameTitle: string) {
+    if (!confirm(`确定要关闭「${gameTitle || '未命名游戏'}」吗？`)) return;
+    setGameActionLoading(gameId);
+    try {
+      await api.adminCloseGame(adminToken!, gameId);
+      loadGames();
+    } catch (err: any) {
+      alert(err.message || "关闭失败");
+    } finally {
+      setGameActionLoading(null);
+    }
+  }
+
+  async function handleDeleteGame(gameId: string, gameTitle: string) {
+    if (!confirm(`确定要废弃「${gameTitle || '未命名游戏'}」吗？此操作不可撤销。`)) return;
+    setGameActionLoading(gameId);
+    try {
+      await api.adminDeleteGame(adminToken!, gameId);
+      loadGames();
+    } catch (err: any) {
+      alert(err.message || "废弃失败");
+    } finally {
+      setGameActionLoading(null);
+    }
   }
 
   // Password gate
@@ -529,6 +612,148 @@ export default function AdminPage() {
               </div>
             );
           })}
+        </div>
+
+        {/* Password Change */}
+        <div className="bg-fantasy-card/80 backdrop-blur-sm rounded-2xl p-6 border border-fantasy-accent/10 space-y-5">
+          <button
+            type="button"
+            onClick={() => setShowPasswordChange(!showPasswordChange)}
+            className="w-full flex items-center justify-between text-lg font-semibold text-fantasy-text"
+          >
+            <span>  修改管理密码</span>
+            <span className="text-fantasy-muted text-sm">{showPasswordChange ? "▲" : "▼"}</span>
+          </button>
+
+          {showPasswordChange && (
+            <form onSubmit={handlePasswordChange} className="space-y-4">
+              {passwordError && (
+                <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-2 rounded-lg text-sm">
+                  {passwordError}
+                </div>
+              )}
+              {passwordSuccess && (
+                <div className="bg-green-500/10 border border-green-500/30 text-green-400 px-4 py-2 rounded-lg text-sm">
+                  {passwordSuccess}
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-fantasy-muted mb-2">当前密码</label>
+                <input
+                  type="password"
+                  value={oldPassword}
+                  onChange={(e) => setOldPassword(e.target.value)}
+                  className="w-full bg-fantasy-bg/50 border border-fantasy-accent/20 rounded-lg px-4 py-3 text-fantasy-text focus:outline-none focus:border-fantasy-accent/50 transition-colors"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-fantasy-muted mb-2">新密码</label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full bg-fantasy-bg/50 border border-fantasy-accent/20 rounded-lg px-4 py-3 text-fantasy-text focus:outline-none focus:border-fantasy-accent/50 transition-colors"
+                  minLength={6}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-fantasy-muted mb-2">确认新密码</label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full bg-fantasy-bg/50 border border-fantasy-accent/20 rounded-lg px-4 py-3 text-fantasy-text focus:outline-none focus:border-fantasy-accent/50 transition-colors"
+                  minLength={6}
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={changingPassword}
+                className="bg-fantasy-accent hover:bg-fantasy-accent/80 disabled:bg-fantasy-accent/50 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors"
+              >
+                {changingPassword ? "修改中..." : "修改密码"}
+              </button>
+            </form>
+          )}
+        </div>
+
+        {/* Room Management */}
+        <div className="bg-fantasy-card/80 backdrop-blur-sm rounded-2xl p-6 border border-fantasy-accent/10 space-y-5">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-fantasy-text">  房间管理</h2>
+            <button
+              type="button"
+              onClick={loadGames}
+              disabled={loadingGames}
+              className="text-fantasy-muted hover:text-fantasy-accent text-sm transition-colors"
+            >
+              {loadingGames ? "刷新中..." : "刷新"}
+            </button>
+          </div>
+
+          {games.length === 0 ? (
+            <p className="text-fantasy-muted text-sm">暂无游戏房间</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-fantasy-muted/60 text-left border-b border-fantasy-accent/10">
+                    <th className="pb-2 pr-3">标题</th>
+                    <th className="pb-2 pr-3">状态</th>
+                    <th className="pb-2 pr-3">玩家</th>
+                    <th className="pb-2 pr-3">章节</th>
+                    <th className="pb-2">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {games.map((g) => (
+                    <tr key={g.id} className="border-b border-fantasy-accent/5">
+                      <td className="py-2.5 pr-3 text-fantasy-text truncate max-w-[150px]">
+                        {g.title || "未命名"}
+                      </td>
+                      <td className="py-2.5 pr-3">
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                          g.status === "active" ? "bg-green-500/20 text-green-400"
+                          : g.status === "lobby" ? "bg-blue-500/20 text-blue-400"
+                          : g.status === "finished" ? "bg-gray-500/20 text-gray-400"
+                          : "bg-yellow-500/20 text-yellow-400"
+                        }`}>
+                          {g.status === "active" ? "进行中" : g.status === "lobby" ? "大厅" : g.status === "finished" ? "已结束" : g.status === "abandoned" ? "已废弃" : g.status}
+                        </span>
+                      </td>
+                      <td className="py-2.5 pr-3 text-fantasy-muted">{g.player_count}</td>
+                      <td className="py-2.5 pr-3 text-fantasy-muted">第{g.current_chapter}章</td>
+                      <td className="py-2.5">
+                        <div className="flex gap-2">
+                          {(g.status === "active" || g.status === "lobby" || g.status === "paused") && (
+                            <button
+                              onClick={() => handleCloseGame(g.id, g.title || "")}
+                              disabled={gameActionLoading === g.id}
+                              className="text-yellow-400 hover:text-yellow-300 text-xs disabled:opacity-50"
+                            >
+                              关闭
+                            </button>
+                          )}
+                          {g.status !== "finished" && g.status !== "abandoned" && (
+                            <button
+                              onClick={() => handleDeleteGame(g.id, g.title || "")}
+                              disabled={gameActionLoading === g.id}
+                              className="text-red-400 hover:text-red-300 text-xs disabled:opacity-50"
+                            >
+                              废弃
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         <button

@@ -182,8 +182,8 @@ class GameService:
         game = result.scalar_one_or_none()
         if not game:
             raise ValueError("Game not found")
-        if game.status != GameStatus.LOBBY:
-            raise ValueError("Game is not in lobby state")
+        if game.status not in (GameStatus.LOBBY, GameStatus.ACTIVE):
+            raise ValueError("Game is not joinable (must be lobby or active)")
 
         # Check player count
         result = await self.db.execute(
@@ -234,18 +234,61 @@ class GameService:
             )
             self.db.add(character)
 
+        is_midgame = game.status == GameStatus.ACTIVE
+
+        # Set mid-game defaults for new characters joining an active game
+        if is_midgame and not existing:
+            if not character.status_effects:
+                character.status_effects = {"health": 100, "items": [], "injuries": []}
+            else:
+                character.status_effects.setdefault("health", 100)
+                character.status_effects.setdefault("items", [])
+                character.status_effects.setdefault("injuries", [])
+
+            # Set location to current chapter's target scene if not already set
+            if not character.location:
+                ai = game.ai_summary or {}
+                scenes = ai.get("scenes", [])
+                if scenes:
+                    chapter = game.current_chapter or 1
+                    target_scene = None
+                    for cp in ai.get("chapter_plan", []):
+                        if cp.get("chapter") == chapter:
+                            target_scene = cp.get("target_scene")
+                            break
+                    if target_scene:
+                        for s in scenes:
+                            if s.get("id") == target_scene:
+                                character.location = target_scene
+                                break
+                    if not character.location:
+                        character.location = scenes[0].get("id")
+
         # Only emit join event on first-time join, not character switches
         if not existing:
-            event = Event(
-                id=str(uuid.uuid4()),
-                game_id=game_id,
-                type=EventType.PLAYER_JOIN,
-                data={
-                    "user_id": user_id,
-                    "character_id": character.id,
-                    "character_name": character.name,
-                },
-            )
+            if is_midgame:
+                event = Event(
+                    id=str(uuid.uuid4()),
+                    game_id=game_id,
+                    type=EventType.MIDGAME_JOIN,
+                    data={
+                        "user_id": user_id,
+                        "character_id": character.id,
+                        "character_name": character.name,
+                        "chapter": game.current_chapter or 1,
+                    },
+                )
+            else:
+                event = Event(
+                    id=str(uuid.uuid4()),
+                    game_id=game_id,
+                    type=EventType.PLAYER_JOIN,
+                    data={
+                        "user_id": user_id,
+                        "character_id": character.id,
+                        "character_name": character.name,
+                    },
+                )
             self.db.add(event)
         await self.db.commit()
         await self.db.refresh(character)
@@ -285,8 +328,8 @@ class GameService:
         game = await self.get_game(game_id)
         if not game:
             raise ValueError("Game not found")
-        if game.status != GameStatus.LOBBY:
-            raise ValueError("Cannot leave a game that has started")
+        if game.status not in (GameStatus.LOBBY, GameStatus.ACTIVE):
+            raise ValueError("Cannot leave a game that has ended")
         if game.creator_id == user_id:
             raise ValueError("Creator cannot leave; use disband instead")
 

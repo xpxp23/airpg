@@ -113,6 +113,8 @@ class ActionService:
                 recent_events_lines.append(f"[{ts}] {data.get('helper_name', '?')} 协助了 {data.get('target_name', '?')}：{data.get('narrative', '')}")
             elif ev.type == EventType.PLAYER_JOIN:
                 recent_events_lines.append(f"[{ts}] {data.get('character_name', '?')} 加入了队伍")
+            elif ev.type == EventType.MIDGAME_JOIN:
+                recent_events_lines.append(f"[{ts}] {data.get('character_name', '?')} 在冒险中途加入了队伍（第{data.get('chapter', '?')}章）")
         recent_events = "\n".join(recent_events_lines) if recent_events_lines else "暂无事件记录"
 
         # 游戏已进行时间
@@ -529,6 +531,8 @@ class ActionService:
                         event_lines.append(f"[{ts}] {data.get('helper_name', '?')} 协助了 {data.get('target_name', '?')}：{data.get('narrative', '')}")
                     elif ev.type == EventType.PLAYER_JOIN:
                         event_lines.append(f"[{ts}] {data.get('character_name', '?')} 加入了队伍")
+                    elif ev.type == EventType.MIDGAME_JOIN:
+                        event_lines.append(f"[{ts}] {data.get('character_name', '?')} 在中途加入了队伍")
                     elif ev.type == EventType.PLAYER_LEAVE:
                         event_lines.append(f"[{ts}] {data.get('character_name', '?')} 离开了队伍")
 

@@ -156,3 +156,14 @@ export interface AdminSettings {
   PROMPT_EVALUATE_COOPERATION?: string;
   PROMPT_COMPRESS_MEMORY?: string;
 }
+
+export interface AdminGameInfo {
+  id: string;
+  title?: string;
+  status: string;
+  creator_id: string;
+  player_count: number;
+  current_chapter: number;
+  created_at: string;
+  started_at?: string;
+}

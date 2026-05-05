@@ -448,15 +448,15 @@ class GameService:
                 event_lines = []
                 for e in events:
                     d = e.data or {}
-                    if e.type.value == "action_result":
-                        event_lines.append(f"[{e.type.value}] {d.get('character_name', '')}: {d.get('narrative', '')[:200]}")
-                    elif e.type.value == "game_start":
+                    if e.type == EventType.ACTION_RESULT:
+                        event_lines.append(f"[行动结果] {d.get('character_name', '')}: {d.get('narrative', '')[:200]}")
+                    elif e.type == EventType.GAME_START:
                         event_lines.append(f"[开场] {d.get('narrative', '')[:200]}")
-                    elif e.type.value == "game_end":
+                    elif e.type == EventType.GAME_END:
                         event_lines.append(f"[结束] {d.get('reason', '')}")
-                    elif e.type.value == "chapter_advance":
+                    elif e.type == EventType.CHAPTER_ADVANCE:
                         event_lines.append(f"[章节推进] 第{d.get('chapter', '?')}章: {d.get('description', '')}")
-                    elif e.type.value == "player_join":
+                    elif e.type == EventType.PLAYER_JOIN or e.type == EventType.MIDGAME_JOIN:
                         event_lines.append(f"[加入] {d.get('character_name', '')}")
                     else:
                         snippet = d.get("public_snippet") or d.get("narrative") or d.get("message") or str(d)[:100]

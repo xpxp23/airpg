@@ -8,19 +8,19 @@ from app.database import Base
 
 
 class EventType(str, enum.Enum):
-    GAME_START = "game_start"
-    GAME_END = "game_end"
-    PLAYER_JOIN = "player_join"
-    PLAYER_LEAVE = "player_leave"
-    ACTION_START = "action_start"
-    ACTION_RESULT = "action_result"
-    COOPERATION_START = "cooperation_start"
-    COOPERATION_RESULT = "cooperation_result"
-    SCENE_CHANGE = "scene_change"
-    CHAPTER_ADVANCE = "chapter_advance"
-    SYSTEM_MESSAGE = "system_message"
-    AI_NARRATIVE = "ai_narrative"
-    MIDGAME_JOIN = "midgame_join"
+    GAME_START = "GAME_START"
+    GAME_END = "GAME_END"
+    PLAYER_JOIN = "PLAYER_JOIN"
+    PLAYER_LEAVE = "PLAYER_LEAVE"
+    ACTION_START = "ACTION_START"
+    ACTION_RESULT = "ACTION_RESULT"
+    COOPERATION_START = "COOPERATION_START"
+    COOPERATION_RESULT = "COOPERATION_RESULT"
+    SCENE_CHANGE = "SCENE_CHANGE"
+    CHAPTER_ADVANCE = "CHAPTER_ADVANCE"
+    SYSTEM_MESSAGE = "SYSTEM_MESSAGE"
+    AI_NARRATIVE = "AI_NARRATIVE"
+    MIDGAME_JOIN = "MIDGAME_JOIN"
 
 
 class Event(Base):

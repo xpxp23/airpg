@@ -1,4 +1,4 @@
-"""Add midgame_join to eventtype enum
+"""Add MIDGAME_JOIN to eventtype enum
 
 Revision ID: 008
 Revises: 007
@@ -18,7 +18,7 @@ def upgrade() -> None:
     op.execute("""
 DO $$
 BEGIN
-    ALTER TYPE eventtype ADD VALUE 'midgame_join';
+    ALTER TYPE eventtype ADD VALUE 'MIDGAME_JOIN';
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END;

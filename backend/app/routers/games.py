@@ -216,7 +216,7 @@ async def get_events(
             EventResponse(
                 id=e.id,
                 game_id=e.game_id,
-                type=e.type.value if hasattr(e.type, "value") else e.type,
+                type=e.type.value.lower() if hasattr(e.type, "value") else e.type,
                 timestamp=e.timestamp,
                 data=e.data,
                 is_visible=e.is_visible,
